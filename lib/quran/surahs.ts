@@ -152,10 +152,36 @@ export function formatAyahRangeCompact(surahNumber: number, fromAyah: number, to
   return fromAyah === toAyah ? `${name} (${fromAyah})` : `${name} (${fromAyah}-${toAyah})`;
 }
 
-type SessionItemLike = { surahNumber: number; fromAyah: number; toAyah: number };
+/** يتحقق أن مقطعاً يمتد من سورة (وآية) إلى سورة أخرى لاحقة (وآية) صحيح: ترتيب السور تصاعدي وأرقام الآيات ضمن حدود كل سورة. */
+export function isValidSurahSpan(fromSurah: number, fromAyah: number, toSurah: number, toAyah: number): boolean {
+  const from = getSurah(fromSurah);
+  const to = getSurah(toSurah);
+  if (!from || !to) return false;
+  if (fromAyah < 1 || fromAyah > from.totalAyahs) return false;
+  if (toAyah < 1 || toAyah > to.totalAyahs) return false;
+  return toSurah >= fromSurah;
+}
+
+type SessionItemLike = {
+  surahNumber: number;
+  fromAyah: number;
+  toAyah: number;
+  toSurahNumber?: number | null;
+};
+
+/** صيغة مختصرة لعرض مقطع قد يمتد عبر أكثر من سورة، مثال: "البقرة (١) ← آل عمران (٢٠٠)" */
+export function formatItemRangeCompact(item: SessionItemLike): string {
+  const spansMultipleSurahs = item.toSurahNumber != null && item.toSurahNumber !== item.surahNumber;
+  if (!spansMultipleSurahs) {
+    return formatAyahRangeCompact(item.surahNumber, item.fromAyah, item.toAyah);
+  }
+  const fromName = getSurahName(item.surahNumber);
+  const toName = getSurahName(item.toSurahNumber as number);
+  return `${fromName} (${item.fromAyah}) ← ${toName} (${item.toAyah})`;
+}
 
 /** يجمع مقاطع الجلسة الواحدة في نص واحد مفصول بفواصل، مثال: "آل عمران (١-٣٠)، النساء (١-٢٠)" */
 export function summarizeSessionItems(items: SessionItemLike[]): string {
   if (items.length === 0) return "—";
-  return items.map((i) => formatAyahRangeCompact(i.surahNumber, i.fromAyah, i.toAyah)).join("، ");
+  return items.map((i) => formatItemRangeCompact(i)).join("، ");
 }

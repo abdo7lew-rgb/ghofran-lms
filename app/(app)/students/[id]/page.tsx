@@ -3,7 +3,7 @@ import { getStudentProfile } from "@/lib/actions/students";
 import { getStudentMemorizationHistory, getStudentLastPosition } from "@/lib/actions/memorization";
 import { getStudentAttendanceHistory } from "@/lib/actions/attendance";
 import { listCircleOptionsForStudentForm } from "@/lib/actions/students";
-import { getSurahName, formatAyahRange, formatAyahRangeCompact } from "@/lib/quran/surahs";
+import { getSurahName, formatAyahRange, formatItemRangeCompact } from "@/lib/quran/surahs";
 import { SESSION_TYPE_LABELS, RATING_LABELS, ATTENDANCE_STATUS_LABELS } from "@/lib/labels";
 import { StudentDialog } from "@/components/students/student-dialog";
 import { MemorizationDialog } from "@/components/memorization/memorization-dialog";
@@ -144,9 +144,7 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
                         <TableCell>
                           <div className="flex flex-col gap-0.5">
                             {s.items.map((item) => (
-                              <span key={item.id}>
-                                {formatAyahRangeCompact(item.surahNumber, item.fromAyah, item.toAyah)}
-                              </span>
+                              <span key={item.id}>{formatItemRangeCompact(item)}</span>
                             ))}
                           </div>
                         </TableCell>

@@ -69,6 +69,9 @@ export const memorizationSessionItems = sqliteTable("memorization_session_items"
     .references(() => memorizationSessions.id, { onDelete: "cascade" }),
   surahNumber: integer("surah_number").notNull(),
   fromAyah: integer("from_ayah").notNull(),
+  // إن كان المقطع يمتد عبر أكثر من سورة (شائع في المراجعة)، تحمل toSurahNumber رقم السورة الأخيرة
+  // وتصير toAyah رقم الآية داخل تلك السورة. إن كانت null فالمقطع ضمن surahNumber نفسها كما كان سابقاً.
+  toSurahNumber: integer("to_surah_number"),
   toAyah: integer("to_ayah").notNull(),
   rating: text("rating", {
     enum: ["EXCELLENT", "VERY_GOOD", "GOOD", "ACCEPTABLE", "WEAK"],

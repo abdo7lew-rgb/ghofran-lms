@@ -3,7 +3,7 @@ import { listRecentSessions } from "@/lib/actions/memorization";
 import { listStudents } from "@/lib/actions/students";
 import { MemorizationDialog } from "@/components/memorization/memorization-dialog";
 import { MemorizationRowActions } from "@/components/memorization/memorization-row-actions";
-import { formatAyahRangeCompact } from "@/lib/quran/surahs";
+import { formatItemRangeCompact } from "@/lib/quran/surahs";
 import { SESSION_TYPE_LABELS, RATING_LABELS } from "@/lib/labels";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -62,9 +62,7 @@ export default async function MemorizationPage() {
                     <TableCell>
                       <div className="flex flex-col gap-0.5">
                         {s.items.map((item) => (
-                          <span key={item.id}>
-                            {formatAyahRangeCompact(item.surahNumber, item.fromAyah, item.toAyah)}
-                          </span>
+                          <span key={item.id}>{formatItemRangeCompact(item)}</span>
                         ))}
                       </div>
                     </TableCell>

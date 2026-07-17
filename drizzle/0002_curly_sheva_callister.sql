@@ -1,0 +1,1 @@
+ALTER TABLE `memorization_session_items` ADD `to_surah_number` integer;

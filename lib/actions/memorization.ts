@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { requireSession, accessibleCircleIds, assertStudentAccess } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
 import { students, circles, memorizationSessions, memorizationSessionItems } from "@/lib/db/schema";
-import { isValidAyahRange, getSurah } from "@/lib/quran/surahs";
+import { isValidAyahRange, isValidSurahSpan, getSurah } from "@/lib/quran/surahs";
 
 export type SessionType = "NEW" | "REVIEW";
 export type Rating = "EXCELLENT" | "VERY_GOOD" | "GOOD" | "ACCEPTABLE" | "WEAK";
@@ -16,6 +16,7 @@ export type SessionItemRecord = {
   sessionId: number;
   surahNumber: number;
   fromAyah: number;
+  toSurahNumber: number | null;
   toAyah: number;
   rating: Rating | null;
   sortOrder: number;
@@ -79,13 +80,21 @@ const itemSchema = z
   .object({
     surahNumber: z.coerce.number().int().min(1).max(114),
     fromAyah: z.coerce.number().int().min(1),
+    toSurahNumber: z.coerce.number().int().min(1).max(114).optional(),
     toAyah: z.coerce.number().int().min(1),
     rating: z.enum(["EXCELLENT", "VERY_GOOD", "GOOD", "ACCEPTABLE", "WEAK"]).optional(),
   })
-  .refine((data) => isValidAyahRange(data.surahNumber, data.fromAyah, data.toAyah), {
-    message: "مدى الآيات غير صحيح لهذه السورة",
-    path: ["toAyah"],
-  });
+  .refine(
+    (data) => {
+      // بدون سورة نهاية، أو سورة النهاية نفسها سورة البداية: مدى آيات عادي ضمن سورة واحدة (كما كان)
+      if (data.toSurahNumber == null || data.toSurahNumber === data.surahNumber) {
+        return isValidAyahRange(data.surahNumber, data.fromAyah, data.toAyah);
+      }
+      // مدى يمتد بين سورتين مختلفتين (شائع في المراجعة): كل رقم آية يُتحقق ضمن حدود سورته
+      return isValidSurahSpan(data.surahNumber, data.fromAyah, data.toSurahNumber, data.toAyah);
+    },
+    { message: "مدى الآيات/السور غير صحيح", path: ["toAyah"] }
+  );
 
 const sessionSchema = z.object({
   studentId: z.coerce.number(),
@@ -137,6 +146,7 @@ export async function createMemorizationSessionAction(
       sessionId: inserted.id,
       surahNumber: item.surahNumber,
       fromAyah: item.fromAyah,
+      toSurahNumber: item.toSurahNumber && item.toSurahNumber !== item.surahNumber ? item.toSurahNumber : null,
       toAyah: item.toAyah,
       rating: item.rating ?? null,
       sortOrder: index,
@@ -192,11 +202,13 @@ export async function getStudentLastPosition(studentId: number) {
 
   if (!lastItem) return null;
 
-  let nextSurah = lastItem.surahNumber;
+  // لجلسات الحفظ الجديد نفترض أن المقطع ضمن سورة واحدة عادةً، لكن نتعامل بأمان مع toSurahNumber إن وُجد
+  const endSurahNumber = lastItem.toSurahNumber ?? lastItem.surahNumber;
+  let nextSurah = endSurahNumber;
   let nextAyah = lastItem.toAyah + 1;
-  const surah = getSurah(lastItem.surahNumber);
+  const surah = getSurah(endSurahNumber);
   if (surah && nextAyah > surah.totalAyahs) {
-    nextSurah = lastItem.surahNumber < 114 ? lastItem.surahNumber + 1 : 1;
+    nextSurah = endSurahNumber < 114 ? endSurahNumber + 1 : 1;
     nextAyah = 1;
   }
 

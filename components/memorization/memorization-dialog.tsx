@@ -32,6 +32,8 @@ type ItemRow = {
   key: string;
   surahNumber: string;
   fromAyah: string;
+  // فارغة = نفس surahNumber (مقطع ضمن سورة واحدة). تُستخدم فقط للمراجعة لدعم مدى يمتد عبر عدة سور.
+  toSurahNumber: string;
   toAyah: string;
   rating: string;
 };
@@ -53,6 +55,7 @@ function newRow(defaults?: Partial<ItemRow>): ItemRow {
     key: `row-${rowKeySeq}`,
     surahNumber: defaults?.surahNumber ?? "1",
     fromAyah: defaults?.fromAyah ?? "",
+    toSurahNumber: defaults?.toSurahNumber ?? "",
     toAyah: defaults?.toAyah ?? "",
     rating: defaults?.rating ?? "",
   };
@@ -81,12 +84,14 @@ export function MemorizationDialog({
 
   useCloseOnSuccess(state, setOpen);
 
-  // إعادة ضبط النموذج عند الفتح لجلسة جديدة
-  React.useEffect(() => {
+  // إعادة ضبط النموذج عند الفتح لجلسة جديدة (تعديل الحالة أثناء العرض مباشرة، بدون useEffect)
+  const [prevOpen, setPrevOpen] = React.useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
     if (open) {
       setItems([newRow()]);
     }
-  }, [open]);
+  }
 
   function updateItem(key: string, patch: Partial<ItemRow>) {
     setItems((prev) => prev.map((row) => (row.key === key ? { ...row, ...patch } : row)));
@@ -105,6 +110,7 @@ export function MemorizationDialog({
     items.map((row) => ({
       surahNumber: row.surahNumber,
       fromAyah: row.fromAyah,
+      toSurahNumber: sessionType === "REVIEW" && row.toSurahNumber ? row.toSurahNumber : undefined,
       toAyah: row.toAyah,
       rating: row.rating || undefined,
     }))
@@ -168,7 +174,12 @@ export function MemorizationDialog({
 
           <div className="flex flex-col gap-3">
             {items.map((row, index) => {
-              const surah = SURAHS.find((s) => s.number === Number(row.surahNumber));
+              const fromSurah = SURAHS.find((s) => s.number === Number(row.surahNumber));
+              const isReviewSpan = sessionType === "REVIEW";
+              const effectiveToSurahNumber = row.toSurahNumber || row.surahNumber;
+              const toSurah = SURAHS.find((s) => s.number === Number(effectiveToSurahNumber));
+              const spansMultipleSurahs = isReviewSpan && effectiveToSurahNumber !== row.surahNumber;
+
               return (
                 <div key={row.key} className="flex flex-col gap-3 rounded-md border p-3">
                   <div className="flex items-center justify-between">
@@ -185,8 +196,18 @@ export function MemorizationDialog({
                   </div>
 
                   <div className="flex flex-col gap-2">
-                    <Label>السورة</Label>
-                    <Select value={row.surahNumber} onValueChange={(v) => updateItem(row.key, { surahNumber: v })}>
+                    <Label>{isReviewSpan ? "من سورة" : "السورة"}</Label>
+                    <Select
+                      value={row.surahNumber}
+                      onValueChange={(v) => {
+                        const patch: Partial<ItemRow> = { surahNumber: v };
+                        // إن صارت سورة النهاية المحفوظة أصغر من سورة البداية الجديدة، صفّرها لتتزامن معها تلقائياً
+                        if (row.toSurahNumber && Number(row.toSurahNumber) < Number(v)) {
+                          patch.toSurahNumber = "";
+                        }
+                        updateItem(row.key, patch);
+                      }}
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -200,6 +221,36 @@ export function MemorizationDialog({
                     </Select>
                   </div>
 
+                  {isReviewSpan && (
+                    <div className="flex flex-col gap-2">
+                      <Label>إلى سورة (اتركها كما هي إن كانت المراجعة ضمن سورة واحدة)</Label>
+                      <Select
+                        value={effectiveToSurahNumber}
+                        onValueChange={(v) => {
+                          const patch: Partial<ItemRow> = { toSurahNumber: v === row.surahNumber ? "" : v };
+                          if (v !== row.surahNumber) {
+                            // تعبئة سريعة مريحة: مراجعة سورة/سور كاملة من مطلعها إلى ختامها
+                            const targetSurah = SURAHS.find((s) => s.number === Number(v));
+                            if (!row.fromAyah) patch.fromAyah = "1";
+                            if (!row.toAyah && targetSurah) patch.toAyah = String(targetSurah.totalAyahs);
+                          }
+                          updateItem(row.key, patch);
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {SURAHS.filter((s) => s.number >= Number(row.surahNumber)).map((s) => (
+                            <SelectItem key={s.number} value={String(s.number)}>
+                              {s.number}. {s.nameArabic}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 gap-4">
                     <div className="flex flex-col gap-2">
                       <Label htmlFor={`fromAyah-${row.key}`}>{fromLabel}</Label>
@@ -207,7 +258,7 @@ export function MemorizationDialog({
                         id={`fromAyah-${row.key}`}
                         type="number"
                         min={1}
-                        max={surah?.totalAyahs}
+                        max={fromSurah?.totalAyahs}
                         required
                         value={row.fromAyah}
                         onChange={(e) => updateItem(row.key, { fromAyah: e.target.value })}
@@ -219,15 +270,18 @@ export function MemorizationDialog({
                         id={`toAyah-${row.key}`}
                         type="number"
                         min={1}
-                        max={surah?.totalAyahs}
+                        max={toSurah?.totalAyahs}
                         required
                         value={row.toAyah}
                         onChange={(e) => updateItem(row.key, { toAyah: e.target.value })}
                       />
                     </div>
                   </div>
-                  {surah && (
-                    <p className="-mt-2 text-xs text-muted-foreground">عدد آيات السورة: {surah.totalAyahs}</p>
+                  {fromSurah && (
+                    <p className="-mt-2 text-xs text-muted-foreground">
+                      عدد آيات {fromSurah.nameArabic}: {fromSurah.totalAyahs}
+                      {spansMultipleSurahs && toSurah ? ` — عدد آيات ${toSurah.nameArabic}: ${toSurah.totalAyahs}` : ""}
+                    </p>
                   )}
 
                   <div className="flex flex-col gap-2">
