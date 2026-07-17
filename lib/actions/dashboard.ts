@@ -4,6 +4,7 @@ import { and, eq, gte, inArray, sql } from "drizzle-orm";
 import { requireSession, accessibleCircleIds } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
 import { circles, students, attendanceRecords, memorizationSessions, users } from "@/lib/db/schema";
+import { excludeHolidayRecords } from "@/lib/holidays";
 
 function daysAgo(days: number) {
   const d = new Date();
@@ -33,10 +34,12 @@ export async function getDashboardStats() {
 
   let attendanceRate = 0;
   if (studentIds.length) {
-    const records = await db
-      .select({ status: attendanceRecords.status })
+    const rawRecords = await db
+      .select({ status: attendanceRecords.status, date: attendanceRecords.date })
       .from(attendanceRecords)
       .where(and(inArray(attendanceRecords.studentId, studentIds), gte(attendanceRecords.date, cutoff)));
+    // أيام العطلة (الخميس والجمعة) لا تدخل في حساب نسبة الحضور إطلاقاً
+    const records = excludeHolidayRecords(rawRecords);
     if (records.length) {
       const present = records.filter((r) => r.status === "PRESENT" || r.status === "LATE").length;
       attendanceRate = Math.round((present / records.length) * 100);

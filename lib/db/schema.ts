@@ -48,6 +48,7 @@ export const attendanceRecords = sqliteTable(
   (table) => [uniqueIndex("attendance_student_date_idx").on(table.studentId, table.date)]
 );
 
+// جلسة واحدة (تسميع أو مراجعة) يمكن أن تحتوي على عدة مقاطع (session items)
 export const memorizationSessions = sqliteTable("memorization_sessions", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   studentId: integer("student_id")
@@ -55,13 +56,23 @@ export const memorizationSessions = sqliteTable("memorization_sessions", {
     .references(() => students.id, { onDelete: "cascade" }),
   date: text("date").notNull(),
   sessionType: text("session_type", { enum: ["NEW", "REVIEW"] }).notNull(),
+  notes: text("notes"),
+  recordedBy: integer("recorded_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: text("created_at").notNull().default(sql`(current_timestamp)`),
+});
+
+// مقاطع الجلسة: كل مقطع يحتوي سورة + مطلع + نهاية + تقييم اختياري
+export const memorizationSessionItems = sqliteTable("memorization_session_items", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  sessionId: integer("session_id")
+    .notNull()
+    .references(() => memorizationSessions.id, { onDelete: "cascade" }),
   surahNumber: integer("surah_number").notNull(),
   fromAyah: integer("from_ayah").notNull(),
   toAyah: integer("to_ayah").notNull(),
   rating: text("rating", {
     enum: ["EXCELLENT", "VERY_GOOD", "GOOD", "ACCEPTABLE", "WEAK"],
-  }).notNull(),
-  notes: text("notes"),
-  recordedBy: integer("recorded_by").references(() => users.id, { onDelete: "set null" }),
+  }),
+  sortOrder: integer("sort_order").notNull().default(0),
   createdAt: text("created_at").notNull().default(sql`(current_timestamp)`),
 });

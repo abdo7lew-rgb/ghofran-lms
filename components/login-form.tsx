@@ -21,6 +21,7 @@ export function LoginForm({ callbackUrl }: { callbackUrl: string }) {
         </div>
         <CardTitle className="text-xl">منظومة حلقات تحفيظ القرآن</CardTitle>
         <CardDescription>مسجد الغفران - تسجيل الدخول</CardDescription>
+        <p className="text-xs font-light text-muted-foreground">خيركم من تعلم القرآن وعلمه</p>
       </CardHeader>
       <CardContent>
         <form action={formAction} className="flex flex-col gap-4">

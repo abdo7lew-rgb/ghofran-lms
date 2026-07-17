@@ -3,7 +3,7 @@ import { getStudentProfile } from "@/lib/actions/students";
 import { getStudentMemorizationHistory, getStudentLastPosition } from "@/lib/actions/memorization";
 import { getStudentAttendanceHistory } from "@/lib/actions/attendance";
 import { listCircleOptionsForStudentForm } from "@/lib/actions/students";
-import { getSurahName, formatAyahRange } from "@/lib/quran/surahs";
+import { getSurahName, formatAyahRange, formatAyahRangeCompact } from "@/lib/quran/surahs";
 import { SESSION_TYPE_LABELS, RATING_LABELS, ATTENDANCE_STATUS_LABELS } from "@/lib/labels";
 import { StudentDialog } from "@/components/students/student-dialog";
 import { MemorizationDialog } from "@/components/memorization/memorization-dialog";
@@ -126,7 +126,7 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
                     <TableRow>
                       <TableHead>التاريخ</TableHead>
                       <TableHead>النوع</TableHead>
-                      <TableHead>الموضع</TableHead>
+                      <TableHead>المقاطع</TableHead>
                       <TableHead>التقييم</TableHead>
                       <TableHead>ملاحظات</TableHead>
                       <TableHead />
@@ -141,8 +141,22 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
                             {SESSION_TYPE_LABELS[s.sessionType]}
                           </Badge>
                         </TableCell>
-                        <TableCell>{formatAyahRange(s.surahNumber, s.fromAyah, s.toAyah)}</TableCell>
-                        <TableCell>{RATING_LABELS[s.rating]}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-0.5">
+                            {s.items.map((item) => (
+                              <span key={item.id}>
+                                {formatAyahRangeCompact(item.surahNumber, item.fromAyah, item.toAyah)}
+                              </span>
+                            ))}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-0.5">
+                            {s.items.map((item) => (
+                              <span key={item.id}>{item.rating ? RATING_LABELS[item.rating] : "—"}</span>
+                            ))}
+                          </div>
+                        </TableCell>
                         <TableCell className="text-muted-foreground">{s.notes || "—"}</TableCell>
                         <TableCell>
                           <MemorizationRowActions id={s.id} studentId={student.id} />

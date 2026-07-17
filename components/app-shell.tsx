@@ -63,6 +63,9 @@ function BrandHeader() {
       <div className="flex flex-col">
         <span className="text-sm font-semibold leading-tight">حلقات الغفران</span>
         <span className="text-xs text-muted-foreground leading-tight">تحفيظ القرآن الكريم</span>
+        <span className="text-[10px] font-light text-muted-foreground/80 leading-tight">
+          خيركم من تعلم القرآن وعلمه
+        </span>
       </div>
     </div>
   );

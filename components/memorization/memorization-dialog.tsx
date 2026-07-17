@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useActionState } from "react";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Plus, X } from "lucide-react";
 import { createMemorizationSessionAction, type MemorizationFormState } from "@/lib/actions/memorization";
 import { useCloseOnSuccess } from "@/hooks/use-close-on-success";
 import { SURAHS } from "@/lib/quran/surahs";
@@ -28,6 +28,14 @@ import {
 
 type StudentOption = { id: number; fullName: string; circleName: string };
 
+type ItemRow = {
+  key: string;
+  surahNumber: string;
+  fromAyah: string;
+  toAyah: string;
+  rating: string;
+};
+
 const RATING_OPTIONS: { value: string; label: string }[] = [
   { value: "EXCELLENT", label: "ممتاز" },
   { value: "VERY_GOOD", label: "جيد جداً" },
@@ -37,6 +45,18 @@ const RATING_OPTIONS: { value: string; label: string }[] = [
 ];
 
 const initialState: MemorizationFormState = {};
+
+let rowKeySeq = 0;
+function newRow(defaults?: Partial<ItemRow>): ItemRow {
+  rowKeySeq += 1;
+  return {
+    key: `row-${rowKeySeq}`,
+    surahNumber: defaults?.surahNumber ?? "1",
+    fromAyah: defaults?.fromAyah ?? "",
+    toAyah: defaults?.toAyah ?? "",
+    rating: defaults?.rating ?? "",
+  };
+}
 
 export function MemorizationDialog({
   students,
@@ -54,12 +74,41 @@ export function MemorizationDialog({
     defaultStudentId ? String(defaultStudentId) : students[0] ? String(students[0].id) : ""
   );
   const [sessionType, setSessionType] = React.useState("NEW");
-  const [surahNumber, setSurahNumber] = React.useState("1");
-  const [rating, setRating] = React.useState("GOOD");
+  const [items, setItems] = React.useState<ItemRow[]>(() => [newRow()]);
 
-  const surah = SURAHS.find((s) => s.number === Number(surahNumber));
+  const fromLabel = sessionType === "NEW" ? "مطلع التسميع" : "من الآية";
+  const toLabel = sessionType === "NEW" ? "نهاية التسميع" : "إلى الآية";
 
   useCloseOnSuccess(state, setOpen);
+
+  // إعادة ضبط النموذج عند الفتح لجلسة جديدة
+  React.useEffect(() => {
+    if (open) {
+      setItems([newRow()]);
+    }
+  }, [open]);
+
+  function updateItem(key: string, patch: Partial<ItemRow>) {
+    setItems((prev) => prev.map((row) => (row.key === key ? { ...row, ...patch } : row)));
+  }
+
+  function addItem() {
+    const last = items[items.length - 1];
+    setItems((prev) => [...prev, newRow(last ? { surahNumber: last.surahNumber } : undefined)]);
+  }
+
+  function removeItem(key: string) {
+    setItems((prev) => (prev.length > 1 ? prev.filter((row) => row.key !== key) : prev));
+  }
+
+  const itemsPayload = JSON.stringify(
+    items.map((row) => ({
+      surahNumber: row.surahNumber,
+      fromAyah: row.fromAyah,
+      toAyah: row.toAyah,
+      rating: row.rating || undefined,
+    }))
+  );
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -78,8 +127,7 @@ export function MemorizationDialog({
         <form action={formAction} className="flex flex-col gap-4">
           <input type="hidden" name="studentId" value={studentId} />
           <input type="hidden" name="sessionType" value={sessionType} />
-          <input type="hidden" name="surahNumber" value={surahNumber} />
-          <input type="hidden" name="rating" value={rating} />
+          <input type="hidden" name="items" value={itemsPayload} />
 
           {!defaultStudentId && (
             <div className="flex flex-col gap-2">
@@ -118,50 +166,97 @@ export function MemorizationDialog({
             </div>
           </div>
 
-          <div className="flex flex-col gap-2">
-            <Label>السورة</Label>
-            <Select value={surahNumber} onValueChange={setSurahNumber}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {SURAHS.map((s) => (
-                  <SelectItem key={s.number} value={String(s.number)}>
-                    {s.number}. {s.nameArabic}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <div className="flex flex-col gap-3">
+            {items.map((row, index) => {
+              const surah = SURAHS.find((s) => s.number === Number(row.surahNumber));
+              return (
+                <div key={row.key} className="flex flex-col gap-3 rounded-md border p-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-medium text-muted-foreground">مقطع {index + 1}</p>
+                    <button
+                      type="button"
+                      onClick={() => removeItem(row.key)}
+                      disabled={items.length === 1}
+                      aria-label="حذف المقطع"
+                      className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-destructive disabled:opacity-30 disabled:hover:bg-transparent"
+                    >
+                      <X className="size-4" />
+                    </button>
+                  </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="fromAyah">من الآية</Label>
-              <Input id="fromAyah" name="fromAyah" type="number" min={1} max={surah?.totalAyahs} required />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="toAyah">إلى الآية</Label>
-              <Input id="toAyah" name="toAyah" type="number" min={1} max={surah?.totalAyahs} required />
-            </div>
-          </div>
-          {surah && (
-            <p className="-mt-2 text-xs text-muted-foreground">عدد آيات السورة: {surah.totalAyahs}</p>
-          )}
+                  <div className="flex flex-col gap-2">
+                    <Label>السورة</Label>
+                    <Select value={row.surahNumber} onValueChange={(v) => updateItem(row.key, { surahNumber: v })}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {SURAHS.map((s) => (
+                          <SelectItem key={s.number} value={String(s.number)}>
+                            {s.number}. {s.nameArabic}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-          <div className="flex flex-col gap-2">
-            <Label>تقييم الأداء</Label>
-            <Select value={rating} onValueChange={setRating}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {RATING_OPTIONS.map((r) => (
-                  <SelectItem key={r.value} value={r.value}>
-                    {r.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor={`fromAyah-${row.key}`}>{fromLabel}</Label>
+                      <Input
+                        id={`fromAyah-${row.key}`}
+                        type="number"
+                        min={1}
+                        max={surah?.totalAyahs}
+                        required
+                        value={row.fromAyah}
+                        onChange={(e) => updateItem(row.key, { fromAyah: e.target.value })}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor={`toAyah-${row.key}`}>{toLabel}</Label>
+                      <Input
+                        id={`toAyah-${row.key}`}
+                        type="number"
+                        min={1}
+                        max={surah?.totalAyahs}
+                        required
+                        value={row.toAyah}
+                        onChange={(e) => updateItem(row.key, { toAyah: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  {surah && (
+                    <p className="-mt-2 text-xs text-muted-foreground">عدد آيات السورة: {surah.totalAyahs}</p>
+                  )}
+
+                  <div className="flex flex-col gap-2">
+                    <Label>تقييم الأداء (اختياري)</Label>
+                    <Select
+                      value={row.rating || "__NONE__"}
+                      onValueChange={(v) => updateItem(row.key, { rating: v === "__NONE__" ? "" : v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__NONE__">بدون تقييم</SelectItem>
+                        {RATING_OPTIONS.map((r) => (
+                          <SelectItem key={r.value} value={r.value}>
+                            {r.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              );
+            })}
+
+            <Button type="button" variant="outline" size="sm" onClick={addItem} className="self-start">
+              <Plus />
+              إضافة مقطع آخر
+            </Button>
           </div>
 
           <div className="flex flex-col gap-2">

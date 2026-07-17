@@ -8,6 +8,13 @@
       "when": 1784124583776,
       "tag": "0000_steep_ken_ellis",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1784304000000,
+      "tag": "0001_add_session_items",
+      "breakpoints": true
     }
   ]
 }

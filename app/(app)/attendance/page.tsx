@@ -2,6 +2,7 @@ import { listMyCircles } from "@/lib/actions/circles";
 import { getAttendanceSheet } from "@/lib/actions/attendance";
 import { AttendanceSelector } from "@/components/attendance/attendance-selector";
 import { AttendanceForm } from "@/components/attendance/attendance-form";
+import { isHoliday } from "@/lib/holidays";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 function today() {
@@ -27,6 +28,7 @@ export default async function AttendancePage({
 
   const circleId = params.circleId ? Number(params.circleId) : circles[0].id;
   const date = params.date || today();
+  const holiday = isHoliday(date);
 
   const sheet = await getAttendanceSheet(circleId, date);
 
@@ -46,7 +48,11 @@ export default async function AttendancePage({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {sheet.students.length === 0 ? (
+          {holiday ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              هذا اليوم عطلة أسبوعية (الخميس/الجمعة) — لا يُسجَّل فيه حضور
+            </p>
+          ) : sheet.students.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">لا يوجد طلبة في هذه الحلقة بعد</p>
           ) : (
             <AttendanceForm circleId={circleId} date={date} students={sheet.students} />

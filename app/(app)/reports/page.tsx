@@ -4,7 +4,7 @@ import {
   getCircleReport,
   getTeacherReport,
 } from "@/lib/actions/reports";
-import { ATTENDANCE_STATUS_LABELS, SESSION_TYPE_LABELS, RATING_LABELS } from "@/lib/labels";
+import { ATTENDANCE_STATUS_LABELS, SESSION_TYPE_LABELS } from "@/lib/labels";
 import { ReportSelector } from "@/components/reports/report-selector";
 import { PrintableReport } from "@/components/reports/printable-report";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -48,8 +48,8 @@ async function StudentReportView({ studentId, from, to }: { studentId: number; f
     <PrintableReport
       title={`تقرير الطالب: ${report.student.fullName}`}
       subtitle={`الحلقة: ${report.circleName}`}
-      from={from}
-      to={to}
+      from={report.from}
+      to={report.to}
     >
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
         <Stat label="نسبة الحضور" value={report.attendanceRate !== null ? `${report.attendanceRate}%` : "—"} />
@@ -58,43 +58,36 @@ async function StudentReportView({ studentId, from, to }: { studentId: number; f
       </div>
 
       <div>
-        <h3 className="mb-2 font-medium">سجل الحفظ والمراجعة</h3>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>التاريخ</TableHead>
-              <TableHead>النوع</TableHead>
-              <TableHead>الموضع</TableHead>
-              <TableHead>التقييم</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {report.memorization.map((m) => (
-              <TableRow key={m.id}>
-                <TableCell>{m.date}</TableCell>
-                <TableCell>{SESSION_TYPE_LABELS[m.sessionType]}</TableCell>
-                <TableCell>{m.positionText}</TableCell>
-                <TableCell>{RATING_LABELS[m.rating]}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-
-      <div>
-        <h3 className="mb-2 font-medium">سجل الحضور</h3>
+        <h3 className="mb-2 font-medium">السجل اليومي</h3>
+        <p className="mb-2 text-xs text-muted-foreground">
+          (أيام العطلة الأسبوعية — الخميس والجمعة — لا تظهر في هذا السجل)
+        </p>
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>التاريخ</TableHead>
               <TableHead>الحالة</TableHead>
+              <TableHead>التفاصيل</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {report.attendance.map((a) => (
-              <TableRow key={a.id}>
-                <TableCell>{a.date}</TableCell>
-                <TableCell>{ATTENDANCE_STATUS_LABELS[a.status]}</TableCell>
+            {report.days.map((day) => (
+              <TableRow key={day.date}>
+                <TableCell>{day.date}</TableCell>
+                <TableCell>
+                  {!day.hasRecord
+                    ? "غائب"
+                    : day.attendanceStatus
+                      ? ATTENDANCE_STATUS_LABELS[day.attendanceStatus]
+                      : "—"}
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  {day.memorization.length === 0
+                    ? "—"
+                    : day.memorization
+                        .map((m) => `${SESSION_TYPE_LABELS[m.sessionType]}: ${m.summary}`)
+                        .join(" — ")}
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>

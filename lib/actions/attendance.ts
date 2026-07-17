@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { assertCircleAccess, assertStudentAccess } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
 import { students, attendanceRecords, circles } from "@/lib/db/schema";
+import { isHoliday } from "@/lib/holidays";
 
 export type AttendanceStatus = "PRESENT" | "ABSENT" | "LATE" | "EXCUSED";
 
@@ -48,6 +49,7 @@ export async function saveAttendanceAction(
   const circleId = Number(formData.get("circleId"));
   const date = String(formData.get("date") ?? "");
   if (!circleId || !date) return { error: "بيانات غير صحيحة" };
+  if (isHoliday(date)) return { error: "لا يمكن تسجيل حضور في يوم عطلة (الخميس أو الجمعة)" };
 
   const session = await assertCircleAccess(circleId);
 

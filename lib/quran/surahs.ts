@@ -145,3 +145,17 @@ export function formatAyahRange(surahNumber: number, fromAyah: number, toAyah: n
   if (fromAyah === toAyah) return `${name}: الآية ${fromAyah}`;
   return `${name}: من الآية ${fromAyah} إلى الآية ${toAyah}`;
 }
+
+/** صيغة مختصرة لعرض مقطع ضمن قائمة مقاطع جلسة واحدة، مثال: "البقرة (١-٢٠)" */
+export function formatAyahRangeCompact(surahNumber: number, fromAyah: number, toAyah: number): string {
+  const name = getSurahName(surahNumber);
+  return fromAyah === toAyah ? `${name} (${fromAyah})` : `${name} (${fromAyah}-${toAyah})`;
+}
+
+type SessionItemLike = { surahNumber: number; fromAyah: number; toAyah: number };
+
+/** يجمع مقاطع الجلسة الواحدة في نص واحد مفصول بفواصل، مثال: "آل عمران (١-٣٠)، النساء (١-٢٠)" */
+export function summarizeSessionItems(items: SessionItemLike[]): string {
+  if (items.length === 0) return "—";
+  return items.map((i) => formatAyahRangeCompact(i.surahNumber, i.fromAyah, i.toAyah)).join("، ");
+}
