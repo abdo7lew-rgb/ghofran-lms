@@ -6,6 +6,7 @@ import { Loader2, Plus, X } from "lucide-react";
 import { createMemorizationSessionAction, type MemorizationFormState } from "@/lib/actions/memorization";
 import { useCloseOnSuccess } from "@/hooks/use-close-on-success";
 import { SURAHS } from "@/lib/quran/surahs";
+import { HIZB_STARTS } from "@/lib/quran/hizb";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -195,18 +196,41 @@ export function MemorizationDialog({
                     </button>
                   </div>
 
+                  {isReviewSpan && (
+                    <div className="flex flex-col gap-2">
+                      <Label className="text-muted-foreground">تعبئة سريعة: ابدأ من مطلع حزب</Label>
+                      <Select
+                        value=""
+                        onValueChange={(v) => {
+                          const h = HIZB_STARTS.find((x) => String(x.hizb) === v);
+                          if (!h) return;
+                          updateItem(row.key, {
+                            surahNumber: String(h.surahNumber),
+                            fromAyah: String(h.ayah),
+                            toSurahNumber: "",
+                            toAyah: "",
+                          });
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="اختر حزباً (اختياري)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {HIZB_STARTS.map((h) => (
+                            <SelectItem key={h.hizb} value={String(h.hizb)}>
+                              الحزب {h.hizb} — {SURAHS.find((s) => s.number === h.surahNumber)?.nameArabic} : الآية {h.ayah}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
                   <div className="flex flex-col gap-2">
                     <Label>{isReviewSpan ? "من سورة" : "السورة"}</Label>
                     <Select
                       value={row.surahNumber}
-                      onValueChange={(v) => {
-                        const patch: Partial<ItemRow> = { surahNumber: v };
-                        // إن صارت سورة النهاية المحفوظة أصغر من سورة البداية الجديدة، صفّرها لتتزامن معها تلقائياً
-                        if (row.toSurahNumber && Number(row.toSurahNumber) < Number(v)) {
-                          patch.toSurahNumber = "";
-                        }
-                        updateItem(row.key, patch);
-                      }}
+                      onValueChange={(v) => updateItem(row.key, { surahNumber: v })}
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -241,7 +265,7 @@ export function MemorizationDialog({
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {SURAHS.filter((s) => s.number >= Number(row.surahNumber)).map((s) => (
+                          {SURAHS.map((s) => (
                             <SelectItem key={s.number} value={String(s.number)}>
                               {s.number}. {s.nameArabic}
                             </SelectItem>

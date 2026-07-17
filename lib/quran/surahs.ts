@@ -152,14 +152,18 @@ export function formatAyahRangeCompact(surahNumber: number, fromAyah: number, to
   return fromAyah === toAyah ? `${name} (${fromAyah})` : `${name} (${fromAyah}-${toAyah})`;
 }
 
-/** يتحقق أن مقطعاً يمتد من سورة (وآية) إلى سورة أخرى لاحقة (وآية) صحيح: ترتيب السور تصاعدي وأرقام الآيات ضمن حدود كل سورة. */
+/**
+ * يتحقق أن مقطعاً يمتد من سورة (وآية) إلى سورة أخرى (وآية) صحيح: كل رقم آية ضمن حدود سورته فقط.
+ * لا نفرض ترتيباً تصاعدياً بين السورتين عمداً — فمراجعة الطالب قد تمتد من سورة متأخرة (مثل المجادلة)
+ * إلى سورة سابقة (مثل البقرة)، وهذا شائع في مراجعة المحفوظ تراكمياً بترتيب عكسي.
+ */
 export function isValidSurahSpan(fromSurah: number, fromAyah: number, toSurah: number, toAyah: number): boolean {
   const from = getSurah(fromSurah);
   const to = getSurah(toSurah);
   if (!from || !to) return false;
   if (fromAyah < 1 || fromAyah > from.totalAyahs) return false;
   if (toAyah < 1 || toAyah > to.totalAyahs) return false;
-  return toSurah >= fromSurah;
+  return true;
 }
 
 type SessionItemLike = {
