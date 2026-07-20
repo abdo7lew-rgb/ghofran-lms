@@ -7,6 +7,8 @@ import { createMemorizationSessionAction, type MemorizationFormState } from "@/l
 import { useCloseOnSuccess } from "@/hooks/use-close-on-success";
 import { SURAHS } from "@/lib/quran/surahs";
 import { HIZB_STARTS } from "@/lib/quran/hizb";
+import { THUMN_STARTS } from "@/lib/quran/athman";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,15 +31,25 @@ import {
 
 type StudentOption = { id: number; fullName: string; circleName: string };
 
+type FromMode = "number" | "text" | "none";
+
 type ItemRow = {
   key: string;
   surahNumber: string;
+  fromMode: FromMode;
   fromAyah: string;
+  fromText: string;
   // فارغة = نفس surahNumber (مقطع ضمن سورة واحدة). تُستخدم فقط للمراجعة لدعم مدى يمتد عبر عدة سور.
   toSurahNumber: string;
   toAyah: string;
   rating: string;
 };
+
+const FROM_MODE_OPTIONS: { value: FromMode; label: string }[] = [
+  { value: "number", label: "رقم آية" },
+  { value: "text", label: "نص" },
+  { value: "none", label: "بدون تحديد" },
+];
 
 const RATING_OPTIONS: { value: string; label: string }[] = [
   { value: "EXCELLENT", label: "ممتاز" },
@@ -55,7 +67,9 @@ function newRow(defaults?: Partial<ItemRow>): ItemRow {
   return {
     key: `row-${rowKeySeq}`,
     surahNumber: defaults?.surahNumber ?? "1",
+    fromMode: defaults?.fromMode ?? "number",
     fromAyah: defaults?.fromAyah ?? "",
+    fromText: defaults?.fromText ?? "",
     toSurahNumber: defaults?.toSurahNumber ?? "",
     toAyah: defaults?.toAyah ?? "",
     rating: defaults?.rating ?? "",
@@ -110,7 +124,8 @@ export function MemorizationDialog({
   const itemsPayload = JSON.stringify(
     items.map((row) => ({
       surahNumber: row.surahNumber,
-      fromAyah: row.fromAyah,
+      fromAyah: row.fromMode === "number" ? row.fromAyah : undefined,
+      fromText: row.fromMode === "text" ? row.fromText : undefined,
       toSurahNumber: sessionType === "REVIEW" && row.toSurahNumber ? row.toSurahNumber : undefined,
       toAyah: row.toAyah,
       rating: row.rating || undefined,
@@ -206,6 +221,7 @@ export function MemorizationDialog({
                           if (!h) return;
                           updateItem(row.key, {
                             surahNumber: String(h.surahNumber),
+                            fromMode: "number",
                             fromAyah: String(h.ayah),
                             toSurahNumber: "",
                             toAyah: "",
@@ -219,6 +235,35 @@ export function MemorizationDialog({
                           {HIZB_STARTS.map((h) => (
                             <SelectItem key={h.hizb} value={String(h.hizb)}>
                               الحزب {h.hizb} — {SURAHS.find((s) => s.number === h.surahNumber)?.nameArabic} : الآية {h.ayah}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  {!isReviewSpan && (
+                    <div className="flex flex-col gap-2">
+                      <Label className="text-muted-foreground">تعبئة سريعة: ابدأ من مطلع ثمن</Label>
+                      <Select
+                        value=""
+                        onValueChange={(v) => {
+                          const t = THUMN_STARTS.find((x) => String(x.thumn) === v);
+                          if (!t) return;
+                          updateItem(row.key, {
+                            surahNumber: String(t.surahNumber),
+                            fromMode: "number",
+                            fromAyah: String(t.ayah),
+                          });
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="اختر ثمناً (اختياري)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {THUMN_STARTS.map((t) => (
+                            <SelectItem key={t.thumn} value={String(t.thumn)}>
+                              الثمن {t.thumn} — {SURAHS.find((s) => s.number === t.surahNumber)?.nameArabic} : الآية {t.ayah}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -277,16 +322,48 @@ export function MemorizationDialog({
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="flex flex-col gap-2">
-                      <Label htmlFor={`fromAyah-${row.key}`}>{fromLabel}</Label>
-                      <Input
-                        id={`fromAyah-${row.key}`}
-                        type="number"
-                        min={1}
-                        max={fromSurah?.totalAyahs}
-                        required
-                        value={row.fromAyah}
-                        onChange={(e) => updateItem(row.key, { fromAyah: e.target.value })}
-                      />
+                      <div className="flex items-center justify-between gap-2">
+                        <Label htmlFor={`fromAyah-${row.key}`}>{fromLabel}</Label>
+                        <div className="flex gap-1">
+                          {FROM_MODE_OPTIONS.map((opt) => (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => updateItem(row.key, { fromMode: opt.value })}
+                              className={cn(
+                                "rounded px-1.5 py-0.5 text-[11px]",
+                                row.fromMode === opt.value
+                                  ? "bg-primary text-primary-foreground"
+                                  : "text-muted-foreground hover:bg-accent"
+                              )}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {row.fromMode === "number" && (
+                        <Input
+                          id={`fromAyah-${row.key}`}
+                          type="number"
+                          min={1}
+                          max={fromSurah?.totalAyahs}
+                          value={row.fromAyah}
+                          onChange={(e) => updateItem(row.key, { fromAyah: e.target.value })}
+                        />
+                      )}
+                      {row.fromMode === "text" && (
+                        <Input
+                          id={`fromAyah-${row.key}`}
+                          type="text"
+                          placeholder="مثال: بداية قصة موسى عليه السلام"
+                          value={row.fromText}
+                          onChange={(e) => updateItem(row.key, { fromText: e.target.value })}
+                        />
+                      )}
+                      {row.fromMode === "none" && (
+                        <p className="flex h-9 items-center text-xs text-muted-foreground">بدون تحديد مطلع</p>
+                      )}
                     </div>
                     <div className="flex flex-col gap-2">
                       <Label htmlFor={`toAyah-${row.key}`}>{toLabel}</Label>

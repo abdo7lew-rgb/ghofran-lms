@@ -1,8 +1,8 @@
 import "server-only";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { circles, students } from "@/lib/db/schema";
+import { circleTeachers, students } from "@/lib/db/schema";
 
 export class AuthError extends Error {}
 
@@ -20,13 +20,18 @@ export async function requireSuperAdmin() {
   return session;
 }
 
-/** يتحقق أن المستخدم الحالي مسموح له بالوصول إلى الحلقة المحددة (الشيخ يصل لكل الحلقات، المدرس فقط حلقته). */
+/** يتحقق أن المستخدم الحالي مسموح له بالوصول إلى الحلقة المحددة (الشيخ يصل لكل الحلقات، والمدرس فقط الحلقات المسند إليها). */
 export async function assertCircleAccess(circleId: number) {
   const session = await requireSession();
   if (session.user.role === "SUPER_ADMIN") return session;
 
-  const [circle] = await db.select().from(circles).where(eq(circles.id, circleId)).limit(1);
-  if (!circle || circle.teacherId !== Number(session.user.id)) {
+  const [membership] = await db
+    .select()
+    .from(circleTeachers)
+    .where(and(eq(circleTeachers.circleId, circleId), eq(circleTeachers.teacherId, Number(session.user.id))))
+    .limit(1);
+
+  if (!membership) {
     throw new AuthError("لا تملك صلاحية الوصول لهذه الحلقة");
   }
   return session;
@@ -37,14 +42,18 @@ export async function assertStudentAccess(studentId: number) {
   const session = await requireSession();
   if (session.user.role === "SUPER_ADMIN") return session;
 
-  const [row] = await db
-    .select({ teacherId: circles.teacherId })
-    .from(students)
-    .innerJoin(circles, eq(students.circleId, circles.id))
-    .where(eq(students.id, studentId))
+  const [student] = await db.select().from(students).where(eq(students.id, studentId)).limit(1);
+  if (!student) {
+    throw new AuthError("لا تملك صلاحية الوصول لهذا الطالب");
+  }
+
+  const [membership] = await db
+    .select()
+    .from(circleTeachers)
+    .where(and(eq(circleTeachers.circleId, student.circleId), eq(circleTeachers.teacherId, Number(session.user.id))))
     .limit(1);
 
-  if (!row || row.teacherId !== Number(session.user.id)) {
+  if (!membership) {
     throw new AuthError("لا تملك صلاحية الوصول لهذا الطالب");
   }
   return session;
@@ -56,8 +65,8 @@ export async function accessibleCircleIds(): Promise<number[] | null> {
   if (session.user.role === "SUPER_ADMIN") return null;
 
   const rows = await db
-    .select({ id: circles.id })
-    .from(circles)
-    .where(eq(circles.teacherId, Number(session.user.id)));
+    .select({ id: circleTeachers.circleId })
+    .from(circleTeachers)
+    .where(eq(circleTeachers.teacherId, Number(session.user.id)));
   return rows.map((r) => r.id);
 }

@@ -104,7 +104,7 @@ async function CircleReportView({ circleId, from, to }: { circleId: number; from
   return (
     <PrintableReport
       title={`تقرير الحلقة: ${report.circle.name}`}
-      subtitle={`المدرس: ${report.teacherName ?? "غير مسند"}`}
+      subtitle={`المدرس: ${report.teacherNames.length ? report.teacherNames.join("، ") : "غير مسند"}`}
       from={from}
       to={to}
     >

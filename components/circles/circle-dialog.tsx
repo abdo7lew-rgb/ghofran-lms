@@ -9,36 +9,34 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-type Circle = { id: number; name: string; description: string | null; teacherId: number | null };
+type Circle = { id: number; name: string; description: string | null; teacherIds: number[] };
 type TeacherOption = { id: number; name: string };
 
 const initialState: CircleFormState = {};
-const NO_TEACHER = "none";
 
 export function CircleDialog({ circle, teacherOptions }: { circle?: Circle; teacherOptions: TeacherOption[] }) {
   const [open, setOpen] = React.useState(false);
   const action = circle ? updateCircleAction : createCircleAction;
   const [state, formAction, pending] = useActionState(action, initialState);
   const isEdit = !!circle;
-  const [teacherId, setTeacherId] = React.useState(circle?.teacherId ? String(circle.teacherId) : NO_TEACHER);
+  const [teacherIds, setTeacherIds] = React.useState<number[]>(circle?.teacherIds ?? []);
 
   useCloseOnSuccess(state, setOpen);
+
+  function toggleTeacher(id: number, checked: boolean) {
+    setTeacherIds((prev) => (checked ? [...prev, id] : prev.filter((x) => x !== id)));
+  }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -60,7 +58,9 @@ export function CircleDialog({ circle, teacherOptions }: { circle?: Circle; teac
         </DialogHeader>
         <form action={formAction} className="flex flex-col gap-4">
           {isEdit && <input type="hidden" name="id" value={circle.id} />}
-          <input type="hidden" name="teacherId" value={teacherId === NO_TEACHER ? "" : teacherId} />
+          {teacherIds.map((id) => (
+            <input key={id} type="hidden" name="teacherIds" value={id} />
+          ))}
           <div className="flex flex-col gap-2">
             <Label htmlFor="name">اسم الحلقة</Label>
             <Input id="name" name="name" required defaultValue={circle?.name} />
@@ -70,20 +70,23 @@ export function CircleDialog({ circle, teacherOptions }: { circle?: Circle; teac
             <Textarea id="description" name="description" defaultValue={circle?.description ?? ""} />
           </div>
           <div className="flex flex-col gap-2">
-            <Label>المدرس المسؤول</Label>
-            <Select value={teacherId} onValueChange={setTeacherId}>
-              <SelectTrigger>
-                <SelectValue placeholder="اختر مدرساً" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NO_TEACHER}>بدون مدرس حالياً</SelectItem>
+            <Label>المدرسون المسؤولون</Label>
+            <DialogDescription className="-mt-1">يمكن إسناد أكثر من مدرس لنفس الحلقة</DialogDescription>
+            {teacherOptions.length === 0 ? (
+              <p className="text-sm text-muted-foreground">لا يوجد مدرسون بعد</p>
+            ) : (
+              <div className="flex max-h-48 flex-col gap-2 overflow-y-auto rounded-md border p-3">
                 {teacherOptions.map((t) => (
-                  <SelectItem key={t.id} value={String(t.id)}>
+                  <label key={t.id} className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={teacherIds.includes(t.id)}
+                      onCheckedChange={(checked) => toggleTeacher(t.id, checked === true)}
+                    />
                     {t.name}
-                  </SelectItem>
+                  </label>
                 ))}
-              </SelectContent>
-            </Select>
+              </div>
+            )}
           </div>
           {state.error && <p className="text-sm text-destructive">{state.error}</p>}
           <DialogFooter>

@@ -3,7 +3,7 @@ import { getStudentProfile } from "@/lib/actions/students";
 import { getStudentMemorizationHistory, getStudentLastPosition } from "@/lib/actions/memorization";
 import { getStudentAttendanceHistory } from "@/lib/actions/attendance";
 import { listCircleOptionsForStudentForm } from "@/lib/actions/students";
-import { getSurahName, formatAyahRange, formatItemRangeCompact } from "@/lib/quran/surahs";
+import { getSurahName, formatItemRangeCompact } from "@/lib/quran/surahs";
 import { SESSION_TYPE_LABELS, RATING_LABELS, ATTENDANCE_STATUS_LABELS } from "@/lib/labels";
 import { StudentDialog } from "@/components/students/student-dialog";
 import { MemorizationDialog } from "@/components/memorization/memorization-dialog";
@@ -88,7 +88,7 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
               <div>
                 <p className="text-sm text-muted-foreground">آخر موضع في الحفظ الجديد</p>
                 <p className="font-medium">
-                  {formatAyahRange(lastPosition.last.surahNumber, lastPosition.last.fromAyah, lastPosition.last.toAyah)}
+                  {formatItemRangeCompact(lastPosition.last)}
                   {" "}
                   <span className="text-xs text-muted-foreground">({lastPosition.last.date})</span>
                 </p>

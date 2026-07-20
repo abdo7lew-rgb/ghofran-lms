@@ -3,7 +3,15 @@
 import { and, eq, gte, inArray, lte, type AnyColumn } from "drizzle-orm";
 import { requireSession, requireSuperAdmin, assertStudentAccess, assertCircleAccess } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
-import { students, circles, users, attendanceRecords, memorizationSessions, memorizationSessionItems } from "@/lib/db/schema";
+import {
+  students,
+  circles,
+  circleTeachers,
+  users,
+  attendanceRecords,
+  memorizationSessions,
+  memorizationSessionItems,
+} from "@/lib/db/schema";
 import { summarizeSessionItems } from "@/lib/quran/surahs";
 import { isHoliday, listDatesInRange, excludeHolidayRecords } from "@/lib/holidays";
 import type { AttendanceStatus } from "@/lib/actions/attendance";
@@ -121,9 +129,11 @@ export async function getCircleReport(circleId: number, from?: string, to?: stri
 
   const [circle] = await db.select().from(circles).where(eq(circles.id, circleId)).limit(1);
   if (!circle) return null;
-  const teacher = circle.teacherId
-    ? (await db.select().from(users).where(eq(users.id, circle.teacherId)).limit(1))[0]
-    : null;
+  const teacherRows = await db
+    .select({ id: users.id, name: users.name })
+    .from(circleTeachers)
+    .innerJoin(users, eq(circleTeachers.teacherId, users.id))
+    .where(eq(circleTeachers.circleId, circleId));
 
   const roster = await db.select().from(students).where(eq(students.circleId, circleId));
   const studentIds = roster.map((s) => s.id);
@@ -161,7 +171,7 @@ export async function getCircleReport(circleId: number, from?: string, to?: stri
 
   return {
     circle,
-    teacherName: teacher?.name ?? null,
+    teacherNames: teacherRows.map((t) => t.name),
     studentCount: roster.length,
     attendanceRate: attendance.length ? Math.round((totalPresent / attendance.length) * 100) : null,
     memorizationSessionsCount: memorization.length,
@@ -175,7 +185,11 @@ export async function getTeacherReport(teacherId: number, from?: string, to?: st
   const [teacher] = await db.select().from(users).where(eq(users.id, teacherId)).limit(1);
   if (!teacher) return null;
 
-  const circleRows = await db.select().from(circles).where(eq(circles.teacherId, teacherId));
+  const circleRows = await db
+    .select({ id: circles.id, name: circles.name })
+    .from(circleTeachers)
+    .innerJoin(circles, eq(circleTeachers.circleId, circles.id))
+    .where(eq(circleTeachers.teacherId, teacherId));
   const circleIds = circleRows.map((c) => c.id);
   const roster = circleIds.length
     ? await db.select().from(students).where(inArray(students.circleId, circleIds))

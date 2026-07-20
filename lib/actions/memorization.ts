@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { requireSession, accessibleCircleIds, assertStudentAccess } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
 import { students, circles, memorizationSessions, memorizationSessionItems } from "@/lib/db/schema";
-import { isValidAyahRange, isValidSurahSpan, getSurah } from "@/lib/quran/surahs";
+import { isValidAyahNumber, getSurah } from "@/lib/quran/surahs";
 
 export type SessionType = "NEW" | "REVIEW";
 export type Rating = "EXCELLENT" | "VERY_GOOD" | "GOOD" | "ACCEPTABLE" | "WEAK";
@@ -15,7 +15,8 @@ export type SessionItemRecord = {
   id: number;
   sessionId: number;
   surahNumber: number;
-  fromAyah: number;
+  fromAyah: number | null;
+  fromText: string | null;
   toSurahNumber: number | null;
   toAyah: number;
   rating: Rating | null;
@@ -79,21 +80,34 @@ export async function listRecentSessions(circleId?: number) {
 const itemSchema = z
   .object({
     surahNumber: z.coerce.number().int().min(1).max(114),
-    fromAyah: z.coerce.number().int().min(1),
+    // مطلع المقطع اختياري تماماً: إما رقم آية، أو نص حر يصف المطلع، أو بلا تحديد إطلاقاً
+    fromAyah: z.preprocess(
+      (v) => (v === "" || v == null ? undefined : v),
+      z.coerce.number().int().min(1).optional()
+    ),
+    fromText: z.string().trim().max(300).optional(),
     toSurahNumber: z.coerce.number().int().min(1).max(114).optional(),
     toAyah: z.coerce.number().int().min(1),
     rating: z.enum(["EXCELLENT", "VERY_GOOD", "GOOD", "ACCEPTABLE", "WEAK"]).optional(),
   })
   .refine(
     (data) => {
-      // بدون سورة نهاية، أو سورة النهاية نفسها سورة البداية: مدى آيات عادي ضمن سورة واحدة (كما كان)
-      if (data.toSurahNumber == null || data.toSurahNumber === data.surahNumber) {
-        return isValidAyahRange(data.surahNumber, data.fromAyah, data.toAyah);
+      const sameSurah = data.toSurahNumber == null || data.toSurahNumber === data.surahNumber;
+      const toSurahNumber = sameSurah ? data.surahNumber : data.toSurahNumber!;
+
+      // رقم آية النهاية دائماً مطلوب ويجب أن يكون ضمن حدود سورته
+      if (!isValidAyahNumber(toSurahNumber, data.toAyah)) return false;
+
+      // رقم آية المطلع اختياري؛ إن وُجد يُتحقق ضمن حدود سورة المطلع، وإن كان المقطع ضمن سورة واحدة
+      // يجب ألا يتجاوز آية النهاية
+      if (data.fromAyah != null) {
+        if (!isValidAyahNumber(data.surahNumber, data.fromAyah)) return false;
+        if (sameSurah && data.fromAyah > data.toAyah) return false;
       }
-      // مدى يمتد بين سورتين مختلفتين (شائع في المراجعة): كل رقم آية يُتحقق ضمن حدود سورته
-      return isValidSurahSpan(data.surahNumber, data.fromAyah, data.toSurahNumber, data.toAyah);
+
+      return true;
     },
-    { message: "مدى الآيات/السور غير صحيح", path: ["toAyah"] }
+    { message: "رقم الآية غير صحيح لهذه السورة", path: ["toAyah"] }
   );
 
 const sessionSchema = z.object({
@@ -145,7 +159,8 @@ export async function createMemorizationSessionAction(
     parsed.data.items.map((item, index) => ({
       sessionId: inserted.id,
       surahNumber: item.surahNumber,
-      fromAyah: item.fromAyah,
+      fromAyah: item.fromAyah ?? null,
+      fromText: item.fromAyah == null && item.fromText ? item.fromText : null,
       toSurahNumber: item.toSurahNumber && item.toSurahNumber !== item.surahNumber ? item.toSurahNumber : null,
       toAyah: item.toAyah,
       rating: item.rating ?? null,
@@ -217,6 +232,8 @@ export async function getStudentLastPosition(studentId: number) {
       date: last.date,
       surahNumber: lastItem.surahNumber,
       fromAyah: lastItem.fromAyah,
+      fromText: lastItem.fromText,
+      toSurahNumber: lastItem.toSurahNumber,
       toAyah: lastItem.toAyah,
     },
     next: { surahNumber: nextSurah, ayah: nextAyah },

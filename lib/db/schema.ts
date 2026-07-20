@@ -14,9 +14,24 @@ export const circles = sqliteTable("circles", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
   description: text("description"),
-  teacherId: integer("teacher_id").references(() => users.id, { onDelete: "set null" }),
   createdAt: text("created_at").notNull().default(sql`(current_timestamp)`),
 });
+
+// علاقة متعددة إلى متعددة: يمكن لأكثر من مدرس أن يشرف على نفس الحلقة، وللمدرس أن يشرف على أكثر من حلقة
+export const circleTeachers = sqliteTable(
+  "circle_teachers",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    circleId: integer("circle_id")
+      .notNull()
+      .references(() => circles.id, { onDelete: "cascade" }),
+    teacherId: integer("teacher_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: text("created_at").notNull().default(sql`(current_timestamp)`),
+  },
+  (table) => [uniqueIndex("circle_teachers_unique_idx").on(table.circleId, table.teacherId)]
+);
 
 export const students = sqliteTable("students", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -68,7 +83,10 @@ export const memorizationSessionItems = sqliteTable("memorization_session_items"
     .notNull()
     .references(() => memorizationSessions.id, { onDelete: "cascade" }),
   surahNumber: integer("surah_number").notNull(),
-  fromAyah: integer("from_ayah").notNull(),
+  // مطلع المقطع: إما رقم آية (fromAyah) أو نص حر يصف المطلع (fromText) — أحدهما فقط، وكلاهما اختياري.
+  // ملاحظة: حساب "آخر موضع/بداية التسميع القادم" يعتمد على toAyah فقط، فلا يتأثر إن تُرك fromAyah فارغاً.
+  fromAyah: integer("from_ayah"),
+  fromText: text("from_text"),
   // إن كان المقطع يمتد عبر أكثر من سورة (شائع في المراجعة)، تحمل toSurahNumber رقم السورة الأخيرة
   // وتصير toAyah رقم الآية داخل تلك السورة. إن كانت null فالمقطع ضمن surahNumber نفسها كما كان سابقاً.
   toSurahNumber: integer("to_surah_number"),

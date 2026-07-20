@@ -22,6 +22,20 @@
       "when": 1784314288517,
       "tag": "0002_curly_sheva_callister",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1784323000595,
+      "tag": "0003_true_ghost_rider",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1784576553694,
+      "tag": "0004_greedy_night_thrasher",
+      "breakpoints": true
     }
   ]
 }

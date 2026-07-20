@@ -3,6 +3,7 @@ import { CircleDialog } from "@/components/circles/circle-dialog";
 import { CircleRowActions } from "@/components/circles/circle-row-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 
 export default async function CirclesPage() {
   const [circles, teacherOptions] = await Promise.all([listCirclesWithStats(), listTeacherOptions()]);
@@ -29,7 +30,7 @@ export default async function CirclesPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>اسم الحلقة</TableHead>
-                  <TableHead>المدرس المسؤول</TableHead>
+                  <TableHead>المدرسون المسؤولون</TableHead>
                   <TableHead>عدد الطلبة</TableHead>
                   <TableHead />
                 </TableRow>
@@ -46,7 +47,17 @@ export default async function CirclesPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {circle.teacherName ?? <span className="text-muted-foreground">غير مسند</span>}
+                      {circle.teacherNames.length === 0 ? (
+                        <span className="text-muted-foreground">غير مسند</span>
+                      ) : (
+                        <div className="flex flex-wrap gap-1">
+                          {circle.teacherNames.map((name) => (
+                            <Badge key={name} variant="secondary">
+                              {name}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell>{circle.studentCount}</TableCell>
                     <TableCell>

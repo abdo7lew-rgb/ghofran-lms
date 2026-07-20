@@ -6,7 +6,7 @@ import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { requireSuperAdmin } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
-import { users, circles, students } from "@/lib/db/schema";
+import { users, circles, circleTeachers, students } from "@/lib/db/schema";
 
 export async function listTeachersWithStats() {
   await requireSuperAdmin();
@@ -14,13 +14,15 @@ export async function listTeachersWithStats() {
   const teachers = await db.select().from(users).where(eq(users.role, "TEACHER"));
 
   const circleRows = await db.select().from(circles);
+  const membershipRows = await db.select().from(circleTeachers);
   const studentCounts = await db
     .select({ circleId: students.circleId, total: count() })
     .from(students)
     .groupBy(students.circleId);
 
   return teachers.map((teacher) => {
-    const teacherCircles = circleRows.filter((c) => c.teacherId === teacher.id);
+    const teacherCircleIds = membershipRows.filter((m) => m.teacherId === teacher.id).map((m) => m.circleId);
+    const teacherCircles = circleRows.filter((c) => teacherCircleIds.includes(c.id));
     const studentTotal = teacherCircles.reduce((sum, c) => {
       const found = studentCounts.find((s) => s.circleId === c.id);
       return sum + (found?.total ?? 0);

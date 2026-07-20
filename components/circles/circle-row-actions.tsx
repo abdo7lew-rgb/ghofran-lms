@@ -4,7 +4,7 @@ import { CircleDialog } from "@/components/circles/circle-dialog";
 import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
 import { deleteCircleAction } from "@/lib/actions/circles";
 
-type Circle = { id: number; name: string; description: string | null; teacherId: number | null };
+type Circle = { id: number; name: string; description: string | null; teacherIds: number[] };
 type TeacherOption = { id: number; name: string };
 
 export function CircleRowActions({ circle, teacherOptions }: { circle: Circle; teacherOptions: TeacherOption[] }) {

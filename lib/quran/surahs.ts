@@ -140,6 +140,13 @@ export function isValidAyahRange(surahNumber: number, fromAyah: number, toAyah: 
   return toAyah <= surah.totalAyahs;
 }
 
+/** يتحقق أن رقم آية واحد ضمن حدود سورته (بلا حاجة لمطلع). */
+export function isValidAyahNumber(surahNumber: number, ayah: number): boolean {
+  const surah = getSurah(surahNumber);
+  if (!surah) return false;
+  return ayah >= 1 && ayah <= surah.totalAyahs;
+}
+
 export function formatAyahRange(surahNumber: number, fromAyah: number, toAyah: number): string {
   const name = getSurahName(surahNumber);
   if (fromAyah === toAyah) return `${name}: الآية ${fromAyah}`;
@@ -168,20 +175,31 @@ export function isValidSurahSpan(fromSurah: number, fromAyah: number, toSurah: n
 
 type SessionItemLike = {
   surahNumber: number;
-  fromAyah: number;
+  fromAyah: number | null;
+  fromText?: string | null;
   toAyah: number;
   toSurahNumber?: number | null;
 };
 
+/** يعرض مطلع المقطع: رقم الآية إن وُجد، وإلا النص الحر إن وُجد، وإلا بلا مطلع محدد. */
+function formatFromPart(item: SessionItemLike): string {
+  if (item.fromAyah != null) return `${item.fromAyah}`;
+  if (item.fromText && item.fromText.trim()) return `"${item.fromText.trim()}"`;
+  return "؟";
+}
+
 /** صيغة مختصرة لعرض مقطع قد يمتد عبر أكثر من سورة، مثال: "البقرة (١) ← آل عمران (٢٠٠)" */
 export function formatItemRangeCompact(item: SessionItemLike): string {
   const spansMultipleSurahs = item.toSurahNumber != null && item.toSurahNumber !== item.surahNumber;
+  const fromPart = formatFromPart(item);
   if (!spansMultipleSurahs) {
-    return formatAyahRangeCompact(item.surahNumber, item.fromAyah, item.toAyah);
+    const name = getSurahName(item.surahNumber);
+    if (item.fromAyah != null && item.fromAyah === item.toAyah) return `${name} (${item.fromAyah})`;
+    return `${name} (${fromPart}-${item.toAyah})`;
   }
   const fromName = getSurahName(item.surahNumber);
   const toName = getSurahName(item.toSurahNumber as number);
-  return `${fromName} (${item.fromAyah}) ← ${toName} (${item.toAyah})`;
+  return `${fromName} (${fromPart}) ← ${toName} (${item.toAyah})`;
 }
 
 /** يجمع مقاطع الجلسة الواحدة في نص واحد مفصول بفواصل، مثال: "آل عمران (١-٣٠)، النساء (١-٢٠)" */
