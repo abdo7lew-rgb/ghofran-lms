@@ -263,7 +263,7 @@ export function MemorizationDialog({
                         <SelectContent>
                           {THUMN_STARTS.map((t) => (
                             <SelectItem key={t.thumn} value={String(t.thumn)}>
-                              الثمن {t.thumn} — {SURAHS.find((s) => s.number === t.surahNumber)?.nameArabic} : الآية {t.ayah}
+                              {t.text} — ({SURAHS.find((s) => s.number === t.surahNumber)?.nameArabic}: {t.ayah})
                             </SelectItem>
                           ))}
                         </SelectContent>
