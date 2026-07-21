@@ -138,6 +138,22 @@ export async function updateStudentAction(
   return { success: true };
 }
 
+/**
+ * ينقل طالباً إلى حلقة أخرى. لا يمسّ سجلات الحضور والحفظ أبداً لأنها مرتبطة برقم الطالب نفسه
+ * (student_id) لا برقم الحلقة، فتبقى كاملة تلقائياً بعد النقل دون أي حاجة لترحيلها.
+ */
+export async function transferStudentAction(studentId: number, newCircleId: number) {
+  await assertStudentAccess(studentId);
+  await assertCanUseCircle(newCircleId);
+
+  await db.update(students).set({ circleId: newCircleId }).where(eq(students.id, studentId));
+
+  revalidatePath("/students");
+  revalidatePath(`/students/${studentId}`);
+  revalidatePath("/circles");
+  revalidatePath("/dashboard");
+}
+
 export async function deleteStudentAction(id: number) {
   await assertStudentAccess(id);
   await db.delete(students).where(eq(students.id, id));

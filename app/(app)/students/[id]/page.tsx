@@ -6,6 +6,7 @@ import { listCircleOptionsForStudentForm } from "@/lib/actions/students";
 import { getSurahName, formatItemRangeCompact } from "@/lib/quran/surahs";
 import { SESSION_TYPE_LABELS, RATING_LABELS, ATTENDANCE_STATUS_LABELS } from "@/lib/labels";
 import { StudentDialog } from "@/components/students/student-dialog";
+import { TransferStudentDialog } from "@/components/students/transfer-student-dialog";
 import { MemorizationDialog } from "@/components/memorization/memorization-dialog";
 import { MemorizationRowActions } from "@/components/memorization/memorization-row-actions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,16 +41,25 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
             الحلقة: {circleName} — الانضمام: {student.joinDate}
           </p>
         </div>
-        <StudentDialog
-          student={student}
-          circleOptions={circleOptions}
-          trigger={
-            <button className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm hover:bg-accent">
-              <Pencil className="size-4" />
-              تعديل البيانات
-            </button>
-          }
-        />
+        <div className="flex items-center gap-2">
+          <TransferStudentDialog
+            studentId={student.id}
+            studentName={student.fullName}
+            currentCircleId={student.circleId}
+            currentCircleName={circleName}
+            circleOptions={circleOptions}
+          />
+          <StudentDialog
+            student={student}
+            circleOptions={circleOptions}
+            trigger={
+              <button className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm hover:bg-accent">
+                <Pencil className="size-4" />
+                تعديل البيانات
+              </button>
+            }
+          />
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
