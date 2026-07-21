@@ -177,7 +177,7 @@ type SessionItemLike = {
   surahNumber: number;
   fromAyah: number | null;
   fromText?: string | null;
-  toAyah: number;
+  toAyah: number | null;
   toSurahNumber?: number | null;
 };
 
@@ -194,11 +194,13 @@ export function formatItemRangeCompact(item: SessionItemLike): string {
   const fromPart = formatFromPart(item);
   if (!spansMultipleSurahs) {
     const name = getSurahName(item.surahNumber);
+    if (item.toAyah == null) return `${name} (من ${fromPart})`;
     if (item.fromAyah != null && item.fromAyah === item.toAyah) return `${name} (${item.fromAyah})`;
     return `${name} (${fromPart}-${item.toAyah})`;
   }
   const fromName = getSurahName(item.surahNumber);
   const toName = getSurahName(item.toSurahNumber as number);
+  if (item.toAyah == null) return `${fromName} (${fromPart}) ← ${toName}`;
   return `${fromName} (${fromPart}) ← ${toName} (${item.toAyah})`;
 }
 

@@ -196,6 +196,15 @@ export function MemorizationDialog({
               const toSurah = SURAHS.find((s) => s.number === Number(effectiveToSurahNumber));
               const spansMultipleSurahs = isReviewSpan && effectiveToSurahNumber !== row.surahNumber;
 
+              // نعرض الاختيار الحالي في منتقيّ الحزب/الثمن استناداً إلى بيانات المقطع نفسها (لا حالة منفصلة)،
+              // فيبقى ظاهراً بعد الاختيار (اسم السورة ونصّ المطلع) بدل أن يعود فارغاً
+              const selectedHizb = HIZB_STARTS.find(
+                (h) => String(h.surahNumber) === row.surahNumber && String(h.ayah) === row.fromAyah
+              );
+              const selectedThumn = THUMN_STARTS.find(
+                (t) => String(t.surahNumber) === row.surahNumber && String(t.ayah) === row.fromAyah
+              );
+
               return (
                 <div key={row.key} className="flex flex-col gap-3 rounded-md border p-3">
                   <div className="flex items-center justify-between">
@@ -215,7 +224,7 @@ export function MemorizationDialog({
                     <div className="flex flex-col gap-2">
                       <Label className="text-muted-foreground">تعبئة سريعة: ابدأ من مطلع حزب</Label>
                       <Select
-                        value=""
+                        value={selectedHizb ? String(selectedHizb.hizb) : ""}
                         onValueChange={(v) => {
                           const h = HIZB_STARTS.find((x) => String(x.hizb) === v);
                           if (!h) return;
@@ -246,7 +255,7 @@ export function MemorizationDialog({
                     <div className="flex flex-col gap-2">
                       <Label className="text-muted-foreground">تعبئة سريعة: ابدأ من مطلع ثمن</Label>
                       <Select
-                        value=""
+                        value={selectedThumn ? String(selectedThumn.thumn) : ""}
                         onValueChange={(v) => {
                           const t = THUMN_STARTS.find((x) => String(x.thumn) === v);
                           if (!t) return;
@@ -366,13 +375,13 @@ export function MemorizationDialog({
                       )}
                     </div>
                     <div className="flex flex-col gap-2">
-                      <Label htmlFor={`toAyah-${row.key}`}>{toLabel}</Label>
+                      <Label htmlFor={`toAyah-${row.key}`}>{toLabel} (اختياري)</Label>
                       <Input
                         id={`toAyah-${row.key}`}
                         type="number"
                         min={1}
                         max={toSurah?.totalAyahs}
-                        required
+                        placeholder="بدون تحديد"
                         value={row.toAyah}
                         onChange={(e) => updateItem(row.key, { toAyah: e.target.value })}
                       />

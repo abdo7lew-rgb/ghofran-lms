@@ -96,7 +96,9 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
               <div>
                 <p className="text-sm text-muted-foreground">بداية التسميع القادم</p>
                 <p className="font-medium">
-                  {getSurahName(lastPosition.next.surahNumber)}: الآية {lastPosition.next.ayah}
+                  {lastPosition.next
+                    ? `${getSurahName(lastPosition.next.surahNumber)}: الآية ${lastPosition.next.ayah}`
+                    : "غير محدد — لم تُسجَّل نهاية لآخر تسميع"}
                 </p>
               </div>
             </div>

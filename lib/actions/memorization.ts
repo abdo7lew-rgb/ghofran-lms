@@ -18,7 +18,7 @@ export type SessionItemRecord = {
   fromAyah: number | null;
   fromText: string | null;
   toSurahNumber: number | null;
-  toAyah: number;
+  toAyah: number | null;
   rating: Rating | null;
   sortOrder: number;
 };
@@ -87,7 +87,11 @@ const itemSchema = z
     ),
     fromText: z.string().trim().max(300).optional(),
     toSurahNumber: z.coerce.number().int().min(1).max(114).optional(),
-    toAyah: z.coerce.number().int().min(1),
+    // نهاية التسميع اختيارية تماماً: يمكن تسجيل الجلسة برأس المقطع (المطلع) فقط دون تحديد أين توقف الطالب
+    toAyah: z.preprocess(
+      (v) => (v === "" || v == null ? undefined : v),
+      z.coerce.number().int().min(1).optional()
+    ),
     rating: z.enum(["EXCELLENT", "VERY_GOOD", "GOOD", "ACCEPTABLE", "WEAK"]).optional(),
   })
   .refine(
@@ -95,14 +99,14 @@ const itemSchema = z
       const sameSurah = data.toSurahNumber == null || data.toSurahNumber === data.surahNumber;
       const toSurahNumber = sameSurah ? data.surahNumber : data.toSurahNumber!;
 
-      // رقم آية النهاية دائماً مطلوب ويجب أن يكون ضمن حدود سورته
-      if (!isValidAyahNumber(toSurahNumber, data.toAyah)) return false;
+      // رقم آية النهاية اختياري؛ إن وُجد يجب أن يكون ضمن حدود سورته
+      if (data.toAyah != null && !isValidAyahNumber(toSurahNumber, data.toAyah)) return false;
 
       // رقم آية المطلع اختياري؛ إن وُجد يُتحقق ضمن حدود سورة المطلع، وإن كان المقطع ضمن سورة واحدة
-      // يجب ألا يتجاوز آية النهاية
+      // وكانت نهاية معروفة أيضاً، يجب ألا يتجاوز آية النهاية
       if (data.fromAyah != null) {
         if (!isValidAyahNumber(data.surahNumber, data.fromAyah)) return false;
-        if (sameSurah && data.fromAyah > data.toAyah) return false;
+        if (sameSurah && data.toAyah != null && data.fromAyah > data.toAyah) return false;
       }
 
       return true;
@@ -162,7 +166,7 @@ export async function createMemorizationSessionAction(
       fromAyah: item.fromAyah ?? null,
       fromText: item.fromAyah == null && item.fromText ? item.fromText : null,
       toSurahNumber: item.toSurahNumber && item.toSurahNumber !== item.surahNumber ? item.toSurahNumber : null,
-      toAyah: item.toAyah,
+      toAyah: item.toAyah ?? null,
       rating: item.rating ?? null,
       sortOrder: index,
     }))
@@ -217,10 +221,25 @@ export async function getStudentLastPosition(studentId: number) {
 
   if (!lastItem) return null;
 
+  const lastSummary = {
+    date: last.date,
+    surahNumber: lastItem.surahNumber,
+    fromAyah: lastItem.fromAyah,
+    fromText: lastItem.fromText,
+    toSurahNumber: lastItem.toSurahNumber,
+    toAyah: lastItem.toAyah,
+  };
+
+  // نهاية التسميع اختيارية الآن؛ إن لم تُسجَّل، نستخدم مطلع المقطع نفسه كبديل لتحديد آخر موضع معروف
+  const endAyah = lastItem.toAyah ?? lastItem.fromAyah;
+  if (endAyah == null) {
+    return { last: lastSummary, next: null };
+  }
+
   // لجلسات الحفظ الجديد نفترض أن المقطع ضمن سورة واحدة عادةً، لكن نتعامل بأمان مع toSurahNumber إن وُجد
   const endSurahNumber = lastItem.toSurahNumber ?? lastItem.surahNumber;
   let nextSurah = endSurahNumber;
-  let nextAyah = lastItem.toAyah + 1;
+  let nextAyah = endAyah + 1;
   const surah = getSurah(endSurahNumber);
   if (surah && nextAyah > surah.totalAyahs) {
     nextSurah = endSurahNumber < 114 ? endSurahNumber + 1 : 1;
@@ -228,14 +247,7 @@ export async function getStudentLastPosition(studentId: number) {
   }
 
   return {
-    last: {
-      date: last.date,
-      surahNumber: lastItem.surahNumber,
-      fromAyah: lastItem.fromAyah,
-      fromText: lastItem.fromText,
-      toSurahNumber: lastItem.toSurahNumber,
-      toAyah: lastItem.toAyah,
-    },
+    last: lastSummary,
     next: { surahNumber: nextSurah, ayah: nextAyah },
   };
 }

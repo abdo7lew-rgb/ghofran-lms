@@ -84,13 +84,14 @@ export const memorizationSessionItems = sqliteTable("memorization_session_items"
     .references(() => memorizationSessions.id, { onDelete: "cascade" }),
   surahNumber: integer("surah_number").notNull(),
   // مطلع المقطع: إما رقم آية (fromAyah) أو نص حر يصف المطلع (fromText) — أحدهما فقط، وكلاهما اختياري.
-  // ملاحظة: حساب "آخر موضع/بداية التسميع القادم" يعتمد على toAyah فقط، فلا يتأثر إن تُرك fromAyah فارغاً.
   fromAyah: integer("from_ayah"),
   fromText: text("from_text"),
   // إن كان المقطع يمتد عبر أكثر من سورة (شائع في المراجعة)، تحمل toSurahNumber رقم السورة الأخيرة
   // وتصير toAyah رقم الآية داخل تلك السورة. إن كانت null فالمقطع ضمن surahNumber نفسها كما كان سابقاً.
   toSurahNumber: integer("to_surah_number"),
-  toAyah: integer("to_ayah").notNull(),
+  // نهاية التسميع اختيارية أيضاً (يمكن تسجيل الجلسة برأس الثمن/الآية فقط دون تحديد أين توقف الطالب).
+  // حساب "آخر موضع/بداية التسميع القادم" يتعامل مع هذا: يستخدم fromAyah كبديل إن كانت toAyah فارغة.
+  toAyah: integer("to_ayah"),
   rating: text("rating", {
     enum: ["EXCELLENT", "VERY_GOOD", "GOOD", "ACCEPTABLE", "WEAK"],
   }),
