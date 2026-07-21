@@ -11,9 +11,6 @@ export const SESSION_TYPE_LABELS: Record<string, string> = {
 };
 
 export const RATING_LABELS: Record<string, string> = {
-  EXCELLENT: "ممتاز",
-  VERY_GOOD: "جيد جداً",
-  GOOD: "جيد",
-  ACCEPTABLE: "مقبول",
-  WEAK: "ضعيف",
+  MEMORIZED: "حافظ",
+  NOT_MEMORIZED: "لم يحفظ",
 };

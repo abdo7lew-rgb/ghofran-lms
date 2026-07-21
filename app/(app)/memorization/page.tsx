@@ -74,7 +74,11 @@ export default async function MemorizationPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <MemorizationRowActions id={s.id} studentId={s.studentId} />
+                      <MemorizationRowActions
+                        session={s}
+                        studentId={s.studentId}
+                        student={{ id: s.studentId, fullName: s.studentName, circleName: "" }}
+                      />
                     </TableCell>
                   </TableRow>
                 ))}

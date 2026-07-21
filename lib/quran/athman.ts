@@ -7,6 +7,8 @@
  * حقل text نص المطلع نفسه (كما كُتب يدوياً)، يُستخدم فقط لعرضه في منتقي الواجهة حتى يتعرّف
  * المدرس على الثمن من كلماته لا من رقم الآية وحده.
  */
+import { SURAHS } from "@/lib/quran/surahs";
+
 export type ThumnStart = {
   thumn: number;
   surahNumber: number;
@@ -496,3 +498,24 @@ export const THUMN_STARTS: ThumnStart[] = [
   { thumn: 479, surahNumber: 100, ayah: 9, text: "أفلا يعلم إذا بعثر ما في القبور" },
   { thumn: 480, surahNumber: 105, ayah: 1, text: "ألم تر كيف فعل ربك بأصحاب الفيل" },
 ];
+
+/**
+ * يحسب نهاية ثمن معيّن: الآية التي تسبق مباشرة مطلع الثمن التالي (بترتيب المصحف المطلق)، فيعبر تلقائياً
+ * حدود السورة إن اقتضى الأمر (نادر، لكن وارد). آخر ثمن (480) ينتهي بآخر آية في القرآن (آخر آية من سورة الناس).
+ */
+export function getThumnEnd(thumn: number): { surahNumber: number; ayah: number } | null {
+  const idx = THUMN_STARTS.findIndex((t) => t.thumn === thumn);
+  if (idx === -1) return null;
+
+  const next = THUMN_STARTS[idx + 1];
+  if (!next) {
+    const lastSurah = SURAHS[SURAHS.length - 1];
+    return { surahNumber: lastSurah.number, ayah: lastSurah.totalAyahs };
+  }
+
+  if (next.ayah > 1) return { surahNumber: next.surahNumber, ayah: next.ayah - 1 };
+  const prevSurah = SURAHS.find((s) => s.number === next.surahNumber - 1);
+  return prevSurah
+    ? { surahNumber: prevSurah.number, ayah: prevSurah.totalAyahs }
+    : { surahNumber: next.surahNumber, ayah: next.ayah };
+}

@@ -93,7 +93,7 @@ export const memorizationSessionItems = sqliteTable("memorization_session_items"
   // حساب "آخر موضع/بداية التسميع القادم" يتعامل مع هذا: يستخدم fromAyah كبديل إن كانت toAyah فارغة.
   toAyah: integer("to_ayah"),
   rating: text("rating", {
-    enum: ["EXCELLENT", "VERY_GOOD", "GOOD", "ACCEPTABLE", "WEAK"],
+    enum: ["MEMORIZED", "NOT_MEMORIZED"],
   }),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: text("created_at").notNull().default(sql`(current_timestamp)`),

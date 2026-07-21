@@ -9,7 +9,7 @@ import { students, circles, memorizationSessions, memorizationSessionItems } fro
 import { isValidAyahNumber, getSurah } from "@/lib/quran/surahs";
 
 export type SessionType = "NEW" | "REVIEW";
-export type Rating = "EXCELLENT" | "VERY_GOOD" | "GOOD" | "ACCEPTABLE" | "WEAK";
+export type Rating = "MEMORIZED" | "NOT_MEMORIZED";
 
 export type SessionItemRecord = {
   id: number;
@@ -92,7 +92,7 @@ const itemSchema = z
       (v) => (v === "" || v == null ? undefined : v),
       z.coerce.number().int().min(1).optional()
     ),
-    rating: z.enum(["EXCELLENT", "VERY_GOOD", "GOOD", "ACCEPTABLE", "WEAK"]).optional(),
+    rating: z.enum(["MEMORIZED", "NOT_MEMORIZED"]).optional(),
   })
   .refine(
     (data) => {
@@ -121,6 +121,8 @@ const sessionSchema = z.object({
   notes: z.string().trim().optional(),
   items: z.array(itemSchema).min(1, "أضف مقطعاً واحداً على الأقل"),
 });
+
+const sessionUpdateSchema = sessionSchema.extend({ id: z.coerce.number() });
 
 export type MemorizationFormState = { error?: string; success?: boolean };
 
@@ -162,6 +164,71 @@ export async function createMemorizationSessionAction(
   await db.insert(memorizationSessionItems).values(
     parsed.data.items.map((item, index) => ({
       sessionId: inserted.id,
+      surahNumber: item.surahNumber,
+      fromAyah: item.fromAyah ?? null,
+      fromText: item.fromAyah == null && item.fromText ? item.fromText : null,
+      toSurahNumber: item.toSurahNumber && item.toSurahNumber !== item.surahNumber ? item.toSurahNumber : null,
+      toAyah: item.toAyah ?? null,
+      rating: item.rating ?? null,
+      sortOrder: index,
+    }))
+  );
+
+  revalidatePath("/memorization");
+  revalidatePath(`/students/${parsed.data.studentId}`);
+  revalidatePath("/dashboard");
+  return { success: true };
+}
+
+export async function updateMemorizationSessionAction(
+  _prevState: MemorizationFormState,
+  formData: FormData
+): Promise<MemorizationFormState> {
+  let itemsRaw: unknown;
+  try {
+    itemsRaw = JSON.parse(String(formData.get("items") ?? "[]"));
+  } catch {
+    return { error: "بيانات المقاطع غير صحيحة" };
+  }
+
+  const parsed = sessionUpdateSchema.safeParse({
+    id: formData.get("id"),
+    studentId: formData.get("studentId"),
+    date: formData.get("date"),
+    sessionType: formData.get("sessionType"),
+    notes: formData.get("notes"),
+    items: itemsRaw,
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "بيانات غير صحيحة" };
+  }
+
+  await assertStudentAccess(parsed.data.studentId);
+
+  // نتأكد أن الجلسة المطلوب تعديلها تعود فعلاً لهذا الطالب (دفاعياً، بدل الثقة برقم الجلسة القادم من النموذج)
+  const [existing] = await db
+    .select({ studentId: memorizationSessions.studentId })
+    .from(memorizationSessions)
+    .where(eq(memorizationSessions.id, parsed.data.id))
+    .limit(1);
+  if (!existing || existing.studentId !== parsed.data.studentId) {
+    return { error: "الجلسة غير موجودة" };
+  }
+
+  await db
+    .update(memorizationSessions)
+    .set({
+      date: parsed.data.date,
+      sessionType: parsed.data.sessionType,
+      notes: parsed.data.notes || null,
+    })
+    .where(eq(memorizationSessions.id, parsed.data.id));
+
+  // أبسط وأضمن طريقة لتحديث مجموعة المقاطع كاملة: احذف القديمة وأدرج الجديدة بدل محاولة مطابقة كل صف
+  await db.delete(memorizationSessionItems).where(eq(memorizationSessionItems.sessionId, parsed.data.id));
+  await db.insert(memorizationSessionItems).values(
+    parsed.data.items.map((item, index) => ({
+      sessionId: parsed.data.id,
       surahNumber: item.surahNumber,
       fromAyah: item.fromAyah ?? null,
       fromText: item.fromAyah == null && item.fromText ? item.fromText : null,

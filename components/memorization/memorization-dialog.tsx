@@ -2,12 +2,18 @@
 
 import * as React from "react";
 import { useActionState } from "react";
-import { Loader2, Plus, X } from "lucide-react";
-import { createMemorizationSessionAction, type MemorizationFormState } from "@/lib/actions/memorization";
+import { Loader2, Plus, Pencil, X } from "lucide-react";
+import {
+  createMemorizationSessionAction,
+  updateMemorizationSessionAction,
+  type MemorizationFormState,
+  type SessionType,
+  type SessionItemRecord,
+} from "@/lib/actions/memorization";
 import { useCloseOnSuccess } from "@/hooks/use-close-on-success";
 import { SURAHS } from "@/lib/quran/surahs";
 import { HIZB_STARTS } from "@/lib/quran/hizb";
-import { THUMN_STARTS } from "@/lib/quran/athman";
+import { THUMN_STARTS, getThumnEnd } from "@/lib/quran/athman";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,10 +45,19 @@ type ItemRow = {
   fromMode: FromMode;
   fromAyah: string;
   fromText: string;
-  // فارغة = نفس surahNumber (مقطع ضمن سورة واحدة). تُستخدم فقط للمراجعة لدعم مدى يمتد عبر عدة سور.
+  // فارغة = نفس surahNumber (مقطع ضمن سورة واحدة). تُستخدم للمراجعة أو لثمن يمتد عبر أكثر من سورة.
   toSurahNumber: string;
   toAyah: string;
   rating: string;
+};
+
+// جلسة موجودة للتعديل: التاريخ ونوعها وملاحظاتها ومقاطعها كما تُخزَّن في قاعدة البيانات
+export type EditableSession = {
+  id: number;
+  date: string;
+  sessionType: SessionType;
+  notes: string | null;
+  items: SessionItemRecord[];
 };
 
 const FROM_MODE_OPTIONS: { value: FromMode; label: string }[] = [
@@ -52,11 +67,8 @@ const FROM_MODE_OPTIONS: { value: FromMode; label: string }[] = [
 ];
 
 const RATING_OPTIONS: { value: string; label: string }[] = [
-  { value: "EXCELLENT", label: "ممتاز" },
-  { value: "VERY_GOOD", label: "جيد جداً" },
-  { value: "GOOD", label: "جيد" },
-  { value: "ACCEPTABLE", label: "مقبول" },
-  { value: "WEAK", label: "ضعيف" },
+  { value: "MEMORIZED", label: "حافظ" },
+  { value: "NOT_MEMORIZED", label: "لم يحفظ" },
 ];
 
 const initialState: MemorizationFormState = {};
@@ -76,35 +88,59 @@ function newRow(defaults?: Partial<ItemRow>): ItemRow {
   };
 }
 
+function rowFromRecord(item: SessionItemRecord): ItemRow {
+  rowKeySeq += 1;
+  return {
+    key: `row-${rowKeySeq}`,
+    surahNumber: String(item.surahNumber),
+    fromMode: item.fromAyah != null ? "number" : item.fromText ? "text" : "none",
+    fromAyah: item.fromAyah != null ? String(item.fromAyah) : "",
+    fromText: item.fromText ?? "",
+    toSurahNumber: item.toSurahNumber != null ? String(item.toSurahNumber) : "",
+    toAyah: item.toAyah != null ? String(item.toAyah) : "",
+    rating: item.rating ?? "",
+  };
+}
+
 export function MemorizationDialog({
   students,
   defaultStudentId,
+  session,
   trigger,
 }: {
   students: StudentOption[];
   defaultStudentId?: number;
+  /** إن مُررت، يعمل الحوار في وضع تعديل جلسة موجودة بدل إنشاء جلسة جديدة */
+  session?: EditableSession;
   trigger?: React.ReactNode;
 }) {
+  const isEdit = !!session;
   const [open, setOpen] = React.useState(false);
-  const [state, formAction, pending] = useActionState(createMemorizationSessionAction, initialState);
+  const [state, formAction, pending] = useActionState(
+    isEdit ? updateMemorizationSessionAction : createMemorizationSessionAction,
+    initialState
+  );
 
   const [studentId, setStudentId] = React.useState(
     defaultStudentId ? String(defaultStudentId) : students[0] ? String(students[0].id) : ""
   );
-  const [sessionType, setSessionType] = React.useState("NEW");
-  const [items, setItems] = React.useState<ItemRow[]>(() => [newRow()]);
+  const [sessionType, setSessionType] = React.useState<SessionType>(session?.sessionType ?? "NEW");
+  const [items, setItems] = React.useState<ItemRow[]>(() =>
+    session && session.items.length > 0 ? session.items.map(rowFromRecord) : [newRow()]
+  );
 
   const fromLabel = sessionType === "NEW" ? "مطلع التسميع" : "من الآية";
   const toLabel = sessionType === "NEW" ? "نهاية التسميع" : "إلى الآية";
 
   useCloseOnSuccess(state, setOpen);
 
-  // إعادة ضبط النموذج عند الفتح لجلسة جديدة (تعديل الحالة أثناء العرض مباشرة، بدون useEffect)
+  // إعادة ضبط النموذج عند الفتح (تعديل الحالة أثناء العرض مباشرة، بدون useEffect)
   const [prevOpen, setPrevOpen] = React.useState(open);
   if (open !== prevOpen) {
     setPrevOpen(open);
     if (open) {
-      setItems([newRow()]);
+      setSessionType(session?.sessionType ?? "NEW");
+      setItems(session && session.items.length > 0 ? session.items.map(rowFromRecord) : [newRow()]);
     }
   }
 
@@ -126,7 +162,7 @@ export function MemorizationDialog({
       surahNumber: row.surahNumber,
       fromAyah: row.fromMode === "number" ? row.fromAyah : undefined,
       fromText: row.fromMode === "text" ? row.fromText : undefined,
-      toSurahNumber: sessionType === "REVIEW" && row.toSurahNumber ? row.toSurahNumber : undefined,
+      toSurahNumber: row.toSurahNumber || undefined,
       toAyah: row.toAyah,
       rating: row.rating || undefined,
     }))
@@ -135,18 +171,24 @@ export function MemorizationDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        {trigger ?? (
-          <Button>
-            <Plus />
-            تسجيل جلسة
-          </Button>
-        )}
+        {trigger ??
+          (isEdit ? (
+            <Button variant="ghost" size="icon" aria-label="تعديل الجلسة">
+              <Pencil />
+            </Button>
+          ) : (
+            <Button>
+              <Plus />
+              تسجيل جلسة
+            </Button>
+          ))}
       </DialogTrigger>
       <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>تسجيل جلسة حفظ أو مراجعة</DialogTitle>
+          <DialogTitle>{isEdit ? "تعديل جلسة الحفظ أو المراجعة" : "تسجيل جلسة حفظ أو مراجعة"}</DialogTitle>
         </DialogHeader>
         <form action={formAction} className="flex flex-col gap-4">
+          {isEdit && <input type="hidden" name="id" value={session.id} />}
           <input type="hidden" name="studentId" value={studentId} />
           <input type="hidden" name="sessionType" value={sessionType} />
           <input type="hidden" name="items" value={itemsPayload} />
@@ -172,7 +214,7 @@ export function MemorizationDialog({
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-2">
               <Label>نوع الجلسة</Label>
-              <Select value={sessionType} onValueChange={setSessionType}>
+              <Select value={sessionType} onValueChange={(v) => setSessionType(v as SessionType)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -184,7 +226,13 @@ export function MemorizationDialog({
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="date">التاريخ</Label>
-              <Input id="date" name="date" type="date" required defaultValue={new Date().toISOString().slice(0, 10)} />
+              <Input
+                id="date"
+                name="date"
+                type="date"
+                required
+                defaultValue={session?.date ?? new Date().toISOString().slice(0, 10)}
+              />
             </div>
           </div>
 
@@ -194,7 +242,7 @@ export function MemorizationDialog({
               const isReviewSpan = sessionType === "REVIEW";
               const effectiveToSurahNumber = row.toSurahNumber || row.surahNumber;
               const toSurah = SURAHS.find((s) => s.number === Number(effectiveToSurahNumber));
-              const spansMultipleSurahs = isReviewSpan && effectiveToSurahNumber !== row.surahNumber;
+              const spansMultipleSurahs = effectiveToSurahNumber !== row.surahNumber;
 
               // نعرض الاختيار الحالي في منتقيّ الحزب/الثمن استناداً إلى بيانات المقطع نفسها (لا حالة منفصلة)،
               // فيبقى ظاهراً بعد الاختيار (اسم السورة ونصّ المطلع) بدل أن يعود فارغاً
@@ -251,53 +299,70 @@ export function MemorizationDialog({
                     </div>
                   )}
 
-                  {!isReviewSpan && (
+                  {isReviewSpan ? (
                     <div className="flex flex-col gap-2">
-                      <Label className="text-muted-foreground">تعبئة سريعة: ابدأ من مطلع ثمن</Label>
-                      <Select
-                        value={selectedThumn ? String(selectedThumn.thumn) : ""}
-                        onValueChange={(v) => {
-                          const t = THUMN_STARTS.find((x) => String(x.thumn) === v);
-                          if (!t) return;
-                          updateItem(row.key, {
-                            surahNumber: String(t.surahNumber),
-                            fromMode: "number",
-                            fromAyah: String(t.ayah),
-                          });
-                        }}
-                      >
+                      <Label>من سورة</Label>
+                      <Select value={row.surahNumber} onValueChange={(v) => updateItem(row.key, { surahNumber: v })}>
                         <SelectTrigger>
-                          <SelectValue placeholder="اختر ثمناً (اختياري)" />
+                          <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {THUMN_STARTS.map((t) => (
-                            <SelectItem key={t.thumn} value={String(t.thumn)}>
-                              {t.text} — ({SURAHS.find((s) => s.number === t.surahNumber)?.nameArabic}: {t.ayah})
+                          {SURAHS.map((s) => (
+                            <SelectItem key={s.number} value={String(s.number)}>
+                              {s.number}. {s.nameArabic}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="flex flex-col gap-2">
+                        <Label>السورة</Label>
+                        <Select value={row.surahNumber} onValueChange={(v) => updateItem(row.key, { surahNumber: v })}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {SURAHS.map((s) => (
+                              <SelectItem key={s.number} value={String(s.number)}>
+                                {s.number}. {s.nameArabic}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Label>الثمن (اختياري)</Label>
+                        <Select
+                          value={selectedThumn ? String(selectedThumn.thumn) : ""}
+                          onValueChange={(v) => {
+                            const t = THUMN_STARTS.find((x) => String(x.thumn) === v);
+                            if (!t) return;
+                            const end = getThumnEnd(t.thumn);
+                            updateItem(row.key, {
+                              surahNumber: String(t.surahNumber),
+                              fromMode: "number",
+                              fromAyah: String(t.ayah),
+                              toSurahNumber: end && end.surahNumber !== t.surahNumber ? String(end.surahNumber) : "",
+                              toAyah: end ? String(end.ayah) : "",
+                            });
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="اختر ثمناً" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {THUMN_STARTS.map((t) => (
+                              <SelectItem key={t.thumn} value={String(t.thumn)}>
+                                {t.text} — ({SURAHS.find((s) => s.number === t.surahNumber)?.nameArabic}: {t.ayah})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
                   )}
-
-                  <div className="flex flex-col gap-2">
-                    <Label>{isReviewSpan ? "من سورة" : "السورة"}</Label>
-                    <Select
-                      value={row.surahNumber}
-                      onValueChange={(v) => updateItem(row.key, { surahNumber: v })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {SURAHS.map((s) => (
-                          <SelectItem key={s.number} value={String(s.number)}>
-                            {s.number}. {s.nameArabic}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
 
                   {isReviewSpan && (
                     <div className="flex flex-col gap-2">
@@ -425,7 +490,7 @@ export function MemorizationDialog({
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="notes">ملاحظات</Label>
-            <Textarea id="notes" name="notes" />
+            <Textarea id="notes" name="notes" defaultValue={session?.notes ?? ""} />
           </div>
 
           {state.error && <p className="text-sm text-destructive">{state.error}</p>}

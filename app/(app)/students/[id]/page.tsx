@@ -159,7 +159,11 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
                         </TableCell>
                         <TableCell className="text-muted-foreground">{s.notes || "—"}</TableCell>
                         <TableCell>
-                          <MemorizationRowActions id={s.id} studentId={student.id} />
+                          <MemorizationRowActions
+                            session={s}
+                            studentId={student.id}
+                            student={{ id: student.id, fullName: student.fullName, circleName }}
+                          />
                         </TableCell>
                       </TableRow>
                     ))}
