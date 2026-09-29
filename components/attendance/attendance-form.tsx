@@ -2,8 +2,10 @@
 
 import * as React from "react";
 import { useActionState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { matchesSearch } from "@/lib/search";
+import { Input } from "@/components/ui/input";
 import { saveAttendanceAction, type AttendanceStatus, type SaveAttendanceState } from "@/lib/actions/attendance";
 import { Button } from "@/components/ui/button";
 
@@ -22,13 +24,16 @@ function StudentStatusRow({
   student,
   value,
   onChange,
+  hidden,
 }: {
   student: StudentRow;
   value: AttendanceStatus;
   onChange: (status: AttendanceStatus) => void;
+  hidden: boolean;
 }) {
+  // الصف المخفي بالبحث يبقى داخل النموذج حتى يُحفظ حضور كل الطلبة
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b py-3 last:border-0">
+    <div hidden={hidden} className="flex flex-wrap items-center justify-between gap-3 border-b py-3 last:border-0">
       <span className="font-medium">{student.fullName}</span>
       <div className="flex flex-wrap gap-1.5">
         {STATUS_OPTIONS.map((opt) => (
@@ -63,6 +68,8 @@ export function AttendanceForm({
     Object.fromEntries(students.map((s) => [s.id, s.status]))
   );
   const [state, formAction, pending] = useActionState(saveAttendanceAction, initialState);
+  const [query, setQuery] = React.useState("");
+  const visibleCount = students.filter((s) => matchesSearch(s.fullName, query)).length;
 
   function setAll(status: AttendanceStatus) {
     setStatuses(Object.fromEntries(students.map((s) => [s.id, status])));
@@ -89,6 +96,19 @@ export function AttendanceForm({
         </div>
       </div>
 
+      {students.length > 8 && (
+        <div className="relative w-full max-w-sm">
+          <Search className="absolute start-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && e.preventDefault()}
+            placeholder="ابحث عن طالب في الحلقة..."
+            className="ps-8"
+          />
+        </div>
+      )}
+
       <div className="rounded-lg border px-4">
         {students.map((student) => (
           <StudentStatusRow
@@ -96,8 +116,10 @@ export function AttendanceForm({
             student={student}
             value={statuses[student.id]}
             onChange={(status) => setStatuses((prev) => ({ ...prev, [student.id]: status }))}
+            hidden={!matchesSearch(student.fullName, query)}
           />
         ))}
+        {visibleCount === 0 && <p className="py-6 text-center text-sm text-muted-foreground">لا يوجد طالب بهذا الاسم</p>}
       </div>
 
       {state.error && <p className="text-sm text-destructive">{state.error}</p>}

@@ -7,6 +7,7 @@ import { requireSession, accessibleCircleIds, assertStudentAccess } from "@/lib/
 import { db } from "@/lib/db";
 import { students, circles, memorizationSessions, memorizationSessionItems } from "@/lib/db/schema";
 import { isValidAyahNumber, getSurah } from "@/lib/quran/surahs";
+import { matchesSearch } from "@/lib/search";
 
 export type SessionType = "NEW" | "REVIEW";
 export type Rating = "MEMORIZED" | "NOT_MEMORIZED";
@@ -40,7 +41,7 @@ async function fetchItemsBySessionIds(sessionIds: number[]): Promise<Map<number,
   return map;
 }
 
-export async function listRecentSessions(circleId?: number) {
+export async function listRecentSessions(circleId?: number, studentQuery?: string) {
   await requireSession();
   const ids = await accessibleCircleIds();
 
@@ -57,7 +58,9 @@ export async function listRecentSessions(circleId?: number) {
   }
   if (circleIds.length === 0) return [];
 
-  const roster = await db.select().from(students).where(inArray(students.circleId, circleIds));
+  const roster = (await db.select().from(students).where(inArray(students.circleId, circleIds))).filter(
+    (s) => !studentQuery || matchesSearch(s.fullName, studentQuery)
+  );
   if (roster.length === 0) return [];
   const studentMap = new Map(roster.map((s) => [s.id, s.fullName]));
 

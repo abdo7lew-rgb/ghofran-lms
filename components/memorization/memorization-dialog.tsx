@@ -13,7 +13,9 @@ import {
 import { useCloseOnSuccess } from "@/hooks/use-close-on-success";
 import { SURAHS } from "@/lib/quran/surahs";
 import { HIZB_STARTS } from "@/lib/quran/hizb";
-import { THUMN_STARTS, getThumnEnd } from "@/lib/quran/athman";
+import { ALL_PORTIONS, getPortionEnd } from "@/lib/quran/athman";
+import { ThumnPicker } from "@/components/memorization/thumn-picker";
+import { StudentPicker } from "@/components/student-picker";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -121,9 +123,7 @@ export function MemorizationDialog({
     initialState
   );
 
-  const [studentId, setStudentId] = React.useState(
-    defaultStudentId ? String(defaultStudentId) : students[0] ? String(students[0].id) : ""
-  );
+  const [studentId, setStudentId] = React.useState(defaultStudentId ? String(defaultStudentId) : "");
   const [sessionType, setSessionType] = React.useState<SessionType>(session?.sessionType ?? "NEW");
   const [items, setItems] = React.useState<ItemRow[]>(() =>
     session && session.items.length > 0 ? session.items.map(rowFromRecord) : [newRow()]
@@ -183,7 +183,13 @@ export function MemorizationDialog({
             </Button>
           ))}
       </DialogTrigger>
-      <DialogContent className="max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        className="max-h-[90vh] overflow-y-auto"
+        onEscapeKeyDown={(e) => {
+          // Escape داخل منتقي (ثمن/طالب) يغلق المنتقي فقط، لا نافذة التسجيل كلها
+          if ((e.target as HTMLElement | null)?.closest?.("[data-picker]")) e.preventDefault();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{isEdit ? "تعديل جلسة الحفظ أو المراجعة" : "تسجيل جلسة حفظ أو مراجعة"}</DialogTitle>
         </DialogHeader>
@@ -196,18 +202,11 @@ export function MemorizationDialog({
           {!defaultStudentId && (
             <div className="flex flex-col gap-2">
               <Label>الطالب</Label>
-              <Select value={studentId} onValueChange={setStudentId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="اختر الطالب" />
-                </SelectTrigger>
-                <SelectContent>
-                  {students.map((s) => (
-                    <SelectItem key={s.id} value={String(s.id)}>
-                      {s.fullName} — {s.circleName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <StudentPicker
+                students={students.map((s) => ({ id: s.id, name: s.fullName, circleName: s.circleName }))}
+                value={studentId}
+                onChange={setStudentId}
+              />
             </div>
           )}
 
@@ -249,9 +248,12 @@ export function MemorizationDialog({
               const selectedHizb = HIZB_STARTS.find(
                 (h) => String(h.surahNumber) === row.surahNumber && String(h.ayah) === row.fromAyah
               );
-              const selectedThumn = THUMN_STARTS.find(
-                (t) => String(t.surahNumber) === row.surahNumber && String(t.ayah) === row.fromAyah
-              );
+              const selectedPortion =
+                row.fromMode === "number"
+                  ? (ALL_PORTIONS.find(
+                      (p) => String(p.surahNumber) === row.surahNumber && String(p.ayah) === row.fromAyah
+                    ) ?? null)
+                  : null;
 
               return (
                 <div key={row.key} className="flex flex-col gap-3 rounded-md border p-3">
@@ -334,32 +336,20 @@ export function MemorizationDialog({
                       </div>
                       <div className="flex flex-col gap-2">
                         <Label>الثمن (اختياري)</Label>
-                        <Select
-                          value={selectedThumn ? String(selectedThumn.thumn) : ""}
-                          onValueChange={(v) => {
-                            const t = THUMN_STARTS.find((x) => String(x.thumn) === v);
-                            if (!t) return;
-                            const end = getThumnEnd(t.thumn);
+                        <ThumnPicker
+                          surahNumber={Number(row.surahNumber)}
+                          selected={selectedPortion}
+                          onSelect={(p) => {
+                            const end = getPortionEnd(p.surahNumber, p.ayah);
                             updateItem(row.key, {
-                              surahNumber: String(t.surahNumber),
+                              surahNumber: String(p.surahNumber),
                               fromMode: "number",
-                              fromAyah: String(t.ayah),
-                              toSurahNumber: end && end.surahNumber !== t.surahNumber ? String(end.surahNumber) : "",
-                              toAyah: end ? String(end.ayah) : "",
+                              fromAyah: String(p.ayah),
+                              toSurahNumber: end.surahNumber !== p.surahNumber ? String(end.surahNumber) : "",
+                              toAyah: String(end.ayah),
                             });
                           }}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="اختر ثمناً" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {THUMN_STARTS.map((t) => (
-                              <SelectItem key={t.thumn} value={String(t.thumn)}>
-                                {t.text} — ({SURAHS.find((s) => s.number === t.surahNumber)?.nameArabic}: {t.ayah})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        />
                       </div>
                     </div>
                   )}

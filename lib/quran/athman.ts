@@ -500,14 +500,13 @@ export const THUMN_STARTS: ThumnStart[] = [
 ];
 
 /**
- * يحسب نهاية ثمن معيّن: الآية التي تسبق مباشرة مطلع الثمن التالي (بترتيب المصحف المطلق)، فيعبر تلقائياً
- * حدود السورة إن اقتضى الأمر (نادر، لكن وارد). آخر ثمن (480) ينتهي بآخر آية في القرآن (آخر آية من سورة الناس).
+ * نهاية المقطع الذي يبدأ من (سورة، آية): الآية التي تسبق مباشرة أول مطلع ثمن بعده (بترتيب المصحف المطلق)،
+ * فيعبر حدود السورة إن اقتضى الأمر. ما بعد آخر ثمن (480) ينتهي بآخر آية من سورة الناس.
  */
-export function getThumnEnd(thumn: number): { surahNumber: number; ayah: number } | null {
-  const idx = THUMN_STARTS.findIndex((t) => t.thumn === thumn);
-  if (idx === -1) return null;
-
-  const next = THUMN_STARTS[idx + 1];
+export function getPortionEnd(surahNumber: number, ayah: number): { surahNumber: number; ayah: number } {
+  const next = THUMN_STARTS.find(
+    (t) => t.surahNumber > surahNumber || (t.surahNumber === surahNumber && t.ayah > ayah)
+  );
   if (!next) {
     const lastSurah = SURAHS[SURAHS.length - 1];
     return { surahNumber: lastSurah.number, ayah: lastSurah.totalAyahs };
@@ -518,4 +517,25 @@ export function getThumnEnd(thumn: number): { surahNumber: number; ayah: number 
   return prevSurah
     ? { surahNumber: prevSurah.number, ayah: prevSurah.totalAyahs }
     : { surahNumber: next.surahNumber, ayah: next.ayah };
+}
+
+/** مطلع يمكن اختياره في منتقي الأثمان: ثمن فعلي، أو بداية سورة لا تبدأ بثمن (thumn = null) */
+export type PortionOption = { key: string; thumn: number | null; surahNumber: number; ayah: number; text: string };
+
+function toOption(t: ThumnStart): PortionOption {
+  return { key: `t${t.thumn}`, thumn: t.thumn, surahNumber: t.surahNumber, ayah: t.ayah, text: t.text };
+}
+
+function surahStartOption(surahNumber: number): PortionOption {
+  const name = SURAHS.find((s) => s.number === surahNumber)?.nameArabic ?? "";
+  return { key: `s${surahNumber}`, thumn: null, surahNumber, ayah: 1, text: `بداية سورة ${name}` };
+}
+
+export const ALL_PORTIONS: PortionOption[] = SURAHS.flatMap((s) => {
+  const athman = THUMN_STARTS.filter((t) => t.surahNumber === s.number).map(toOption);
+  return athman.some((t) => t.ayah === 1) ? athman : [surahStartOption(s.number), ...athman];
+});
+
+export function portionsForSurah(surahNumber: number): PortionOption[] {
+  return ALL_PORTIONS.filter((p) => p.surahNumber === surahNumber);
 }

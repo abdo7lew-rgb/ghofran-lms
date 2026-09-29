@@ -2,11 +2,24 @@ import Link from "next/link";
 import { listStudents, listCircleOptionsForStudentForm } from "@/lib/actions/students";
 import { StudentDialog } from "@/components/students/student-dialog";
 import { StudentRowActions } from "@/components/students/student-row-actions";
+import { ListFilters } from "@/components/list-filters";
+import { matchesSearch } from "@/lib/search";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-export default async function StudentsPage() {
-  const [students, circleOptions] = await Promise.all([listStudents(), listCircleOptionsForStudentForm()]);
+export default async function StudentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; circle?: string }>;
+}) {
+  const { q, circle } = await searchParams;
+  const [allStudents, circleOptions] = await Promise.all([listStudents(), listCircleOptionsForStudentForm()]);
+  const isFiltered = Boolean(q || circle);
+  const students = allStudents.filter(
+    (s) =>
+      (!circle || String(s.circleId) === circle) &&
+      (!q || matchesSearch(`${s.fullName} ${s.guardianName ?? ""} ${s.guardianPhone ?? ""}`, q))
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -19,8 +32,18 @@ export default async function StudentsPage() {
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle>قائمة الطلبة ({students.length})</CardTitle>
+        <CardHeader className="gap-4">
+          <CardTitle>
+            قائمة الطلبة ({isFiltered ? `${students.length} من ${allStudents.length}` : allStudents.length})
+          </CardTitle>
+          {allStudents.length > 0 && (
+            <ListFilters
+              circles={circleOptions}
+              query={q}
+              circleId={circle}
+              placeholder="ابحث بالاسم أو اسم ولي الأمر أو رقمه..."
+            />
+          )}
         </CardHeader>
         <CardContent>
           {circleOptions.length === 0 ? (
@@ -28,7 +51,9 @@ export default async function StudentsPage() {
               لا توجد حلقة مسندة إليك بعد. تواصل مع الشيخ المشرف.
             </p>
           ) : students.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">لا يوجد طلبة بعد</p>
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              {isFiltered ? "لا يوجد طالب يطابق البحث" : "لا يوجد طلبة بعد"}
+            </p>
           ) : (
             <Table>
               <TableHeader>

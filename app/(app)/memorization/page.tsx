@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { listRecentSessions } from "@/lib/actions/memorization";
 import { listStudents } from "@/lib/actions/students";
+import { listMyCircles } from "@/lib/actions/circles";
+import { ListFilters } from "@/components/list-filters";
 import { MemorizationDialog } from "@/components/memorization/memorization-dialog";
 import { MemorizationRowActions } from "@/components/memorization/memorization-row-actions";
 import { formatItemRangeCompact } from "@/lib/quran/surahs";
@@ -9,8 +11,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 
-export default async function MemorizationPage() {
-  const [sessions, students] = await Promise.all([listRecentSessions(), listStudents()]);
+export default async function MemorizationPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; circle?: string }>;
+}) {
+  const { q, circle } = await searchParams;
+  const circleId = circle ? Number(circle) : undefined;
+  const [sessions, students, circles] = await Promise.all([
+    listRecentSessions(circleId, q),
+    listStudents(),
+    listMyCircles(),
+  ]);
+  const isFiltered = Boolean(q || circle);
 
   return (
     <div className="flex flex-col gap-6">
@@ -23,8 +36,11 @@ export default async function MemorizationPage() {
       </div>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="gap-4">
           <CardTitle>آخر الجلسات المسجلة</CardTitle>
+          {students.length > 0 && (
+            <ListFilters circles={circles.map((c) => ({ id: c.id, name: c.name }))} query={q} circleId={circle} />
+          )}
         </CardHeader>
         <CardContent>
           {students.length === 0 ? (
@@ -32,7 +48,9 @@ export default async function MemorizationPage() {
               لا توجد حلقة مسندة إليك بعد. تواصل مع الشيخ المشرف.
             </p>
           ) : sessions.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">لا توجد جلسات مسجلة بعد</p>
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              {isFiltered ? "لا توجد جلسات تطابق البحث" : "لا توجد جلسات مسجلة بعد"}
+            </p>
           ) : (
             <Table>
               <TableHeader>

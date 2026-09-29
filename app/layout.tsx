@@ -20,6 +20,9 @@ export const metadata: Metadata = {
   },
 };
 
+// أي نشر مربوط بقاعدة التجربة يُظهر شريط "نسخة تجريبية" حتى لا يُسجَّل فيه شيء حقيقي بالخطأ
+const isTestDatabase = process.env.TURSO_DATABASE_URL?.includes("ghofran-dev") ?? false;
+
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
@@ -33,7 +36,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ar" dir="rtl" className={`${cairo.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col font-sans">{children}</body>
+      <body className="min-h-full flex flex-col font-sans">
+        {isTestDatabase && (
+          <div className="no-print sticky top-0 z-50 bg-amber-400 px-4 py-1.5 text-center text-sm font-semibold text-amber-950">
+            نسخة تجريبية — البيانات هنا للتجربة فقط ولا تُحفظ في المنظومة الأصلية
+          </div>
+        )}
+        {children}
+      </body>
     </html>
   );
 }

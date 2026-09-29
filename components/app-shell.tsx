@@ -118,7 +118,7 @@ export function AppShell({ user, children }: { user: CurrentUser; children: Reac
 
   return (
     <div className="flex min-h-screen w-full">
-      <aside className="hidden w-64 shrink-0 flex-col gap-4 border-e bg-card p-4 md:flex">
+      <aside className="no-print hidden w-64 shrink-0 flex-col gap-4 border-e bg-card p-4 md:flex">
         <BrandHeader />
         <NavLinks user={user} />
       </aside>
@@ -140,7 +140,7 @@ export function AppShell({ user, children }: { user: CurrentUser; children: Reac
           <UserMenu user={user} />
         </header>
 
-        <main className="flex-1 p-4 md:p-6">{children}</main>
+        <main className="flex-1 p-4 md:p-6 print:p-0">{children}</main>
       </div>
 
       <DialogPrimitive.Root open={mobileOpen} onOpenChange={setMobileOpen}>

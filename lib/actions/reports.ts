@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, gte, inArray, lte, type AnyColumn } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, notExists, type AnyColumn } from "drizzle-orm";
 import { requireSession, requireSuperAdmin, assertStudentAccess, assertCircleAccess } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
 import {
@@ -16,6 +16,7 @@ import { summarizeSessionItems } from "@/lib/quran/surahs";
 import { isHoliday, listDatesInRange, excludeHolidayRecords } from "@/lib/holidays";
 import type { AttendanceStatus } from "@/lib/actions/attendance";
 import type { SessionType } from "@/lib/actions/memorization";
+import { MEMORIZATION_GRADE_MAX } from "@/lib/labels";
 
 function dateFilter(column: AnyColumn, from?: string, to?: string) {
   const conditions = [];
@@ -35,19 +36,86 @@ function daysBefore(dateStr: string, days: number): string {
   return dt.toISOString().slice(0, 10);
 }
 
+export type DayMemorizationStatus = "MEMORIZED" | "NOT_MEMORIZED" | "REVIEW" | "NOT_RECITED";
+
+export type MemorizationGrade = { score: number; memorizedDays: number };
+
 export type ReportDay = {
   date: string;
   hasRecord: boolean;
   attendanceStatus: AttendanceStatus | null;
   memorization: { sessionType: SessionType; summary: string }[];
+  memorizationStatus: DayMemorizationStatus | null;
 };
 
-export async function getStudentReport(studentId: number, from?: string, to?: string) {
+// حافظ = جلسة حفظ جديد بمقطع مقيّم "حافظ" (الوحيدة التي تُحتسب في الدرجة)؛ جلسة حفظ جديد بغير ذلك = لم يحفظ؛
+// لا حفظ جديد لكن فيه مراجعة = مراجعة؛ لا شيء = لم يسمع. لا يُحكم على أيام قبل الالتحاق ولا أيام مستقبلية.
+function dayStatus(
+  date: string,
+  joinDate: string,
+  memorizedDates: Set<string>,
+  sessionTypes: SessionType[]
+): DayMemorizationStatus | null {
+  if (memorizedDates.has(date)) return "MEMORIZED";
+  if (sessionTypes.includes("NEW")) return "NOT_MEMORIZED";
+  if (sessionTypes.includes("REVIEW")) return "REVIEW";
+  if (date < joinDate || date > today()) return null;
+  return "NOT_RECITED";
+}
+
+/** الدرجة الشهرية: عدد أيام الحفظ في الشهر، بحد أقصى ١٦ (٤ أيام أسبوعياً × ٤ أسابيع) */
+function monthlyGrade(memorizedDates: Set<string> | undefined): MemorizationGrade {
+  const memorizedDays = memorizedDates?.size ?? 0;
+  return { score: Math.min(memorizedDays, MEMORIZATION_GRADE_MAX), memorizedDays };
+}
+
+/** لكل طالب: التواريخ التي فيها جلسة حفظ جديد بمقطع مقيّم "حافظ"، والطالب غير مسجّل غائباً ذلك اليوم */
+async function loadMemorizedDates(studentIds: number[], from?: string, to?: string) {
+  const result = new Map<number, Set<string>>();
+  if (!studentIds.length) return result;
+  const rows = await db
+    .selectDistinct({ studentId: memorizationSessions.studentId, date: memorizationSessions.date })
+    .from(memorizationSessions)
+    .innerJoin(memorizationSessionItems, eq(memorizationSessionItems.sessionId, memorizationSessions.id))
+    .where(
+      and(
+        inArray(memorizationSessions.studentId, studentIds),
+        eq(memorizationSessions.sessionType, "NEW"),
+        eq(memorizationSessionItems.rating, "MEMORIZED"),
+        ...dateFilter(memorizationSessions.date, from, to),
+        notExists(
+          db
+            .select({ id: attendanceRecords.id })
+            .from(attendanceRecords)
+            .where(
+              and(
+                eq(attendanceRecords.studentId, memorizationSessions.studentId),
+                eq(attendanceRecords.date, memorizationSessions.date),
+                inArray(attendanceRecords.status, ["ABSENT", "EXCUSED"])
+              )
+            )
+        )
+      )
+    );
+  for (const r of rows) {
+    const set = result.get(r.studentId) ?? new Set<string>();
+    set.add(r.date);
+    result.set(r.studentId, set);
+  }
+  return result;
+}
+
+export async function getStudentReport(studentId: number, from?: string, to?: string, monthly = false) {
   await assertStudentAccess(studentId);
 
   const [student] = await db.select().from(students).where(eq(students.id, studentId)).limit(1);
   if (!student) return null;
   const [circle] = await db.select().from(circles).where(eq(circles.id, student.circleId)).limit(1);
+  const teacherRows = await db
+    .select({ name: users.name })
+    .from(circleTeachers)
+    .innerJoin(users, eq(circleTeachers.teacherId, users.id))
+    .where(eq(circleTeachers.circleId, student.circleId));
 
   // إذا لم تُحدَّد فترة، نستخدم آخر ٣٠ يوماً كافتراض حتى يمكن بناء قائمة الأيام
   const effectiveTo = to || today();
@@ -99,6 +167,9 @@ export async function getStudentReport(studentId: number, from?: string, to?: st
     memorizationByDate.set(m.date, list);
   }
 
+  const memorizedDates = (await loadMemorizedDates([studentId], effectiveFrom, effectiveTo)).get(studentId) ?? new Set<string>();
+  const memorizationGrade = monthly ? monthlyGrade(memorizedDates) : null;
+
   const days: ReportDay[] = listDatesInRange(effectiveFrom, effectiveTo)
     .filter((date) => !isHoliday(date))
     .map((date) => {
@@ -109,22 +180,30 @@ export async function getStudentReport(studentId: number, from?: string, to?: st
         hasRecord: Boolean(att) || memo.length > 0,
         attendanceStatus: (att?.status as AttendanceStatus) ?? null,
         memorization: memo,
+        memorizationStatus: dayStatus(
+          date,
+          student.joinDate,
+          memorizedDates,
+          memo.map((m) => m.sessionType)
+        ),
       };
     });
 
   return {
     student,
     circleName: circle?.name ?? "",
+    teacherNames: teacherRows.map((t) => t.name),
     from: effectiveFrom,
     to: effectiveTo,
     attendance,
     memorization,
     attendanceRate,
+    memorizationGrade,
     days,
   };
 }
 
-export async function getCircleReport(circleId: number, from?: string, to?: string) {
+export async function getCircleReport(circleId: number, from?: string, to?: string, monthly = false) {
   await assertCircleAccess(circleId);
 
   const [circle] = await db.select().from(circles).where(eq(circles.id, circleId)).limit(1);
@@ -146,24 +225,16 @@ export async function getCircleReport(circleId: number, from?: string, to?: stri
     : [];
   const attendance = excludeHolidayRecords(attendanceRaw);
 
-  const memorization = studentIds.length
-    ? await db
-        .select()
-        .from(memorizationSessions)
-        .where(
-          and(inArray(memorizationSessions.studentId, studentIds), ...dateFilter(memorizationSessions.date, from, to))
-        )
-    : [];
+  const memorizedByStudent = monthly ? await loadMemorizedDates(studentIds, from, to) : null;
 
   const perStudent = roster.map((student) => {
     const studentAttendance = attendance.filter((a) => a.studentId === student.id);
     const present = studentAttendance.filter((a) => a.status === "PRESENT" || a.status === "LATE").length;
-    const studentMemorization = memorization.filter((m) => m.studentId === student.id && m.sessionType === "NEW");
     return {
       studentId: student.id,
       fullName: student.fullName,
       attendanceRate: studentAttendance.length ? Math.round((present / studentAttendance.length) * 100) : null,
-      newSessionsCount: studentMemorization.length,
+      memorizationGrade: memorizedByStudent ? monthlyGrade(memorizedByStudent.get(student.id)) : null,
     };
   });
 
@@ -174,12 +245,17 @@ export async function getCircleReport(circleId: number, from?: string, to?: stri
     teacherNames: teacherRows.map((t) => t.name),
     studentCount: roster.length,
     attendanceRate: attendance.length ? Math.round((totalPresent / attendance.length) * 100) : null,
-    memorizationSessionsCount: memorization.length,
+    averageMemorizationGrade: averageScore(perStudent.map((s) => s.memorizationGrade)),
     perStudent,
   };
 }
 
-export async function getTeacherReport(teacherId: number, from?: string, to?: string) {
+function averageScore(grades: (MemorizationGrade | null)[]): number | null {
+  const scores = grades.filter((g): g is MemorizationGrade => g !== null).map((g) => g.score);
+  return scores.length ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10 : null;
+}
+
+export async function getTeacherReport(teacherId: number, from?: string, to?: string, monthly = false) {
   await requireSuperAdmin();
 
   const [teacher] = await db.select().from(users).where(eq(users.id, teacherId)).limit(1);
@@ -204,23 +280,18 @@ export async function getTeacherReport(teacherId: number, from?: string, to?: st
     : [];
   const attendance = excludeHolidayRecords(attendanceRaw);
 
-  const memorization = studentIds.length
-    ? await db
-        .select()
-        .from(memorizationSessions)
-        .where(
-          and(inArray(memorizationSessions.studentId, studentIds), ...dateFilter(memorizationSessions.date, from, to))
-        )
-    : [];
-
   const totalPresent = attendance.filter((a) => a.status === "PRESENT" || a.status === "LATE").length;
+
+  const memorizedByStudent = monthly ? await loadMemorizedDates(studentIds, from, to) : null;
 
   return {
     teacher,
     circles: circleRows.map((c) => c.name),
     studentCount: roster.length,
     attendanceRate: attendance.length ? Math.round((totalPresent / attendance.length) * 100) : null,
-    memorizationSessionsCount: memorization.length,
+    averageMemorizationGrade: memorizedByStudent
+      ? averageScore(roster.map((s) => monthlyGrade(memorizedByStudent.get(s.id))))
+      : null,
   };
 }
 
