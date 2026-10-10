@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Lock, Plus } from "lucide-react";
 import type { DailySummaryRow, DayMemorizationStatus } from "@/lib/actions/reports";
 import { ATTENDANCE_STATUS_LABELS, DAY_MEMORIZATION_LABELS, SESSION_TYPE_LABELS } from "@/lib/labels";
 import { STATUS_ORDER, STATUS_STYLES } from "@/components/reports/student-days";
@@ -68,40 +68,61 @@ export function DailySummary({ rows, date, showCircle }: { rows: DailySummaryRow
       </div>
 
       <ul className="divide-y rounded-lg border">
-        {visible.map((r) => (
-          <li key={r.studentId} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2.5">
-            <span className={cn("size-2.5 shrink-0 rounded-full", STATUS_STYLES[r.status].dot)} />
-            <div className="flex min-w-[9rem] flex-1 flex-col">
-              <Link href={`/students/${r.studentId}`} className="font-medium hover:underline">
-                {r.fullName}
-              </Link>
-              <span className="text-xs text-muted-foreground">
-                {showCircle && `${r.circleName} · `}
-                الحضور: {r.attendanceStatus ? ATTENDANCE_STATUS_LABELS[r.attendanceStatus] : "غير مسجّل"}
-                {r.sessions.length > 0 &&
-                  ` · ${r.sessions.map((s) => `${SESSION_TYPE_LABELS[s.sessionType]}: ${s.summary}`).join(" — ")}`}
+        {visible.map((r) => {
+          // الطالب المسجَّل غائباً ذلك اليوم لا يُسجَّل له تسميع، فيُقفل زره
+          const absent = r.attendanceStatus === "ABSENT" || r.attendanceStatus === "EXCUSED";
+          return (
+            <li
+              key={r.studentId}
+              className={cn("flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2.5", absent && "bg-muted/40")}
+            >
+              <span className={cn("size-2.5 shrink-0 rounded-full", STATUS_STYLES[r.status].dot)} />
+              <div className="flex min-w-[9rem] flex-1 flex-col">
+                <Link href={`/students/${r.studentId}`} className="font-medium hover:underline">
+                  {r.fullName}
+                </Link>
+                <span className="text-xs text-muted-foreground">
+                  {showCircle && `${r.circleName} · `}
+                  الحضور: {r.attendanceStatus ? ATTENDANCE_STATUS_LABELS[r.attendanceStatus] : "غير مسجّل"}
+                  {r.sessions.length > 0 &&
+                    ` · ${r.sessions.map((s) => `${SESSION_TYPE_LABELS[s.sessionType]}: ${s.summary}`).join(" — ")}`}
+                </span>
+              </div>
+              <span className={cn("rounded-full border px-2.5 py-0.5 text-xs font-semibold", STATUS_STYLES[r.status].chip)}>
+                {DAY_MEMORIZATION_LABELS[r.status]}
               </span>
-            </div>
-            <span className={cn("rounded-full border px-2.5 py-0.5 text-xs font-semibold", STATUS_STYLES[r.status].chip)}>
-              {DAY_MEMORIZATION_LABELS[r.status]}
-            </span>
-            <MemorizationDialog
-              students={[{ id: r.studentId, fullName: r.fullName, circleName: r.circleName }]}
-              defaultStudentId={r.studentId}
-              defaultDate={date}
-              trigger={
+              {absent ? (
                 <Button
-                  variant={r.status === "NOT_RECITED" ? "default" : "ghost"}
+                  variant="outline"
                   size="sm"
-                  aria-label={`تسجيل جلسة لـ ${r.fullName}`}
+                  disabled
+                  aria-label={`${r.fullName} غائب — لا يمكن التسجيل`}
+                  className="w-24"
                 >
-                  <Plus />
-                  تسجيل
+                  <Lock />
+                  {r.attendanceStatus === "EXCUSED" ? "غائب بإذن" : "غائب"}
                 </Button>
-              }
-            />
-          </li>
-        ))}
+              ) : (
+                <MemorizationDialog
+                  students={[{ id: r.studentId, fullName: r.fullName, circleName: r.circleName }]}
+                  defaultStudentId={r.studentId}
+                  defaultDate={date}
+                  trigger={
+                    <Button
+                      variant={r.status === "NOT_RECITED" ? "default" : "ghost"}
+                      size="sm"
+                      aria-label={`تسجيل جلسة لـ ${r.fullName}`}
+                      className="w-24"
+                    >
+                      <Plus />
+                      تسجيل
+                    </Button>
+                  }
+                />
+              )}
+            </li>
+          );
+        })}
         {visible.length === 0 && (
           <li className="px-3 py-8 text-center text-sm text-muted-foreground">
             {rows.length === 0 ? "لا يوجد طلبة في هذا اليوم" : "لا يوجد طلبة بهذه الحالة"}
