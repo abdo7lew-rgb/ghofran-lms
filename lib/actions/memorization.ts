@@ -8,6 +8,7 @@ import { db } from "@/lib/db";
 import { students, circles, memorizationSessions, memorizationSessionItems } from "@/lib/db/schema";
 import { isValidAyahNumber, getSurah } from "@/lib/quran/surahs";
 import { matchesSearch } from "@/lib/search";
+import { suggestNextPortion, type NextSuggestion, type PastPortion } from "@/lib/quran/next-session";
 
 export type SessionType = "NEW" | "REVIEW";
 export type Rating = "MEMORIZED" | "NOT_MEMORIZED";
@@ -325,4 +326,42 @@ export async function getStudentLastPosition(studentId: number) {
     last: lastSummary,
     next: { surahNumber: nextSurah, ayah: nextAyah },
   };
+}
+
+/** اقتراح مقطع الحفظ الجديد القادم للطالب (البداية والنهاية حسب مقداره المعتاد في آخر ٥ جلسات) */
+export async function getNextSessionSuggestion(studentId: number): Promise<NextSuggestion | null> {
+  await assertStudentAccess(studentId);
+  const rows = await db
+    .select({
+      surahNumber: memorizationSessionItems.surahNumber,
+      fromAyah: memorizationSessionItems.fromAyah,
+      toSurahNumber: memorizationSessionItems.toSurahNumber,
+      toAyah: memorizationSessionItems.toAyah,
+      rating: memorizationSessionItems.rating,
+    })
+    .from(memorizationSessionItems)
+    .innerJoin(memorizationSessions, eq(memorizationSessionItems.sessionId, memorizationSessions.id))
+    .where(and(eq(memorizationSessions.studentId, studentId), eq(memorizationSessions.sessionType, "NEW")))
+    .orderBy(
+      desc(memorizationSessions.date),
+      desc(memorizationSessions.id),
+      desc(memorizationSessionItems.sortOrder),
+      desc(memorizationSessionItems.id)
+    )
+    .limit(40);
+
+  // المقاطع غير المحددة الموضع أو الممتدة عبر سور لا تصلح أساساً للاقتراح
+  const history: PastPortion[] = rows
+    .filter(
+      (r): r is typeof r & { fromAyah: number; toAyah: number } =>
+        r.fromAyah != null && r.toAyah != null && (r.toSurahNumber == null || r.toSurahNumber === r.surahNumber)
+    )
+    .reverse()
+    .map((r) => ({
+      surahNumber: r.surahNumber,
+      fromAyah: r.fromAyah,
+      toAyah: r.toAyah,
+      memorized: r.rating === "MEMORIZED" ? true : r.rating === "NOT_MEMORIZED" ? false : null,
+    }));
+  return suggestNextPortion(history);
 }

@@ -2,14 +2,16 @@
 
 import * as React from "react";
 import { useActionState } from "react";
-import { Loader2, Plus, Pencil, X } from "lucide-react";
+import { Loader2, Plus, Pencil, Sparkles, X } from "lucide-react";
 import {
   createMemorizationSessionAction,
   updateMemorizationSessionAction,
+  getNextSessionSuggestion,
   type MemorizationFormState,
   type SessionType,
   type SessionItemRecord,
 } from "@/lib/actions/memorization";
+import type { NextSuggestion } from "@/lib/quran/next-session";
 import { useCloseOnSuccess } from "@/hooks/use-close-on-success";
 import { SURAHS } from "@/lib/quran/surahs";
 import { HIZB_STARTS } from "@/lib/quran/hizb";
@@ -90,6 +92,45 @@ function newRow(defaults?: Partial<ItemRow>): ItemRow {
   };
 }
 
+const surahName = (n: number) => SURAHS.find((s) => s.number === n)?.nameArabic ?? "";
+
+const BLANK_POSITION: Partial<ItemRow> = { surahNumber: "1", fromMode: "number", fromAyah: "", toSurahNumber: "", toAyah: "" };
+
+// مقطع لم يلمسه المحفظ بعد (القيم الافتراضية)، فيصح ملؤه تلقائياً بالاقتراح
+function isBlankRow(row: ItemRow) {
+  return row.surahNumber === "1" && row.fromMode === "number" && !row.fromAyah && !row.toAyah && !row.toSurahNumber && !row.rating;
+}
+
+function suggestionFields(s: NextSuggestion): Partial<ItemRow> {
+  return { surahNumber: String(s.surahNumber), fromMode: "number", fromAyah: String(s.fromAyah), toSurahNumber: "", toAyah: String(s.toAyah) };
+}
+
+function matchesSuggestion(row: ItemRow, s: NextSuggestion) {
+  const f = suggestionFields(s);
+  return row.surahNumber === f.surahNumber && row.fromAyah === f.fromAyah && row.toAyah === f.toAyah && !row.toSurahNumber;
+}
+
+function ayahCount(n: number) {
+  if (n === 1) return "آية واحدة";
+  if (n === 2) return "آيتان";
+  return n <= 10 ? `${n} آيات` : `${n} آية`;
+}
+
+function suggestionText(s: NextSuggestion) {
+  const where = `${surahName(s.surahNumber)} ${s.fromAyah}–${s.toAyah}`;
+  const usual = s.usualAmount ? ` — مقداره المعتاد ${ayahCount(s.usualAmount)} (من آخر 5 جلسات)` : "";
+  switch (s.mode) {
+    case "repeat":
+      return `يعيد ${where} لأنه لم يحفظه في آخر جلسة`;
+    case "cumulative":
+      return `يعيد ${surahName(s.surahNumber)} من الآية ${s.fromAyah} ويزيد حتى ${s.toAyah}${usual}`;
+    case "next-surah":
+      return `أكمل سورته السابقة، يبدأ ${where}${usual}`;
+    default:
+      return `يكمّل من ${where}${usual}`;
+  }
+}
+
 function rowFromRecord(item: SessionItemRecord): ItemRow {
   rowKeySeq += 1;
   return {
@@ -136,6 +177,9 @@ export function MemorizationDialog({
 
   useCloseOnSuccess(state, setOpen);
 
+  const [suggestion, setSuggestion] = React.useState<NextSuggestion | null>(null);
+  const lastSuggestionRef = React.useRef<NextSuggestion | null>(null);
+
   // إعادة ضبط النموذج عند الفتح (تعديل الحالة أثناء العرض مباشرة، بدون useEffect)
   const [prevOpen, setPrevOpen] = React.useState(open);
   if (open !== prevOpen) {
@@ -143,8 +187,36 @@ export function MemorizationDialog({
     if (open) {
       setSessionType(session?.sessionType ?? "NEW");
       setItems(session && session.items.length > 0 ? session.items.map(rowFromRecord) : [newRow()]);
+      setSuggestion(null);
     }
   }
+
+  // اقتراح الحفظ الجديد القادم: يملأ المقطع الوحيد إن كان فارغاً أو ما زال على اقتراح سابق (عند تغيير الطالب)
+  React.useEffect(() => {
+    if (!open || isEdit || sessionType !== "NEW" || !studentId) return;
+    let cancelled = false;
+    getNextSessionSuggestion(Number(studentId))
+      .then((next) => {
+        if (cancelled) return;
+        const previous = lastSuggestionRef.current;
+        lastSuggestionRef.current = next;
+        setSuggestion(next);
+        setItems((rows) => {
+          if (rows.length !== 1) return rows;
+          const row = rows[0];
+          const untouched = isBlankRow(row) || (previous !== null && matchesSuggestion(row, previous));
+          if (!untouched) return rows;
+          return [{ ...row, ...(next ? suggestionFields(next) : BLANK_POSITION) }];
+        });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [open, isEdit, sessionType, studentId]);
+
+  const showSuggestion =
+    suggestion !== null && sessionType === "NEW" && items.length === 1 && matchesSuggestion(items[0], suggestion);
 
   function updateItem(key: string, patch: Partial<ItemRow>) {
     setItems((prev) => prev.map((row) => (row.key === key ? { ...row, ...patch } : row)));
@@ -236,6 +308,25 @@ export function MemorizationDialog({
               />
             </div>
           </div>
+
+          {showSuggestion && (
+            <div className="flex items-start justify-between gap-3 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+              <div className="flex items-start gap-2">
+                <Sparkles className="mt-0.5 size-4 shrink-0 text-primary" />
+                <div>
+                  <p className="font-medium">{suggestionText(suggestion)}</p>
+                  <p className="text-xs text-muted-foreground">اقتراح تلقائي من جلساته السابقة — عدّله إن سمّع غير ذلك</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setItems((rows) => [{ ...rows[0], ...BLANK_POSITION }])}
+                className="shrink-0 text-xs text-muted-foreground underline hover:text-foreground"
+              >
+                مسح
+              </button>
+            </div>
+          )}
 
           <div className="flex flex-col gap-3">
             {items.map((row, index) => {
