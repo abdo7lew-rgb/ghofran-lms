@@ -1,7 +1,14 @@
 "use server";
 
 import { and, eq, gte, inArray, lte, notExists, type AnyColumn } from "drizzle-orm";
-import { requireSession, requireSuperAdmin, assertStudentAccess, assertCircleAccess } from "@/lib/auth/guards";
+import {
+  requireSession,
+  requireSuperAdmin,
+  assertStudentAccess,
+  assertCircleAccess,
+  accessibleCircleIds,
+} from "@/lib/auth/guards";
+import { matchesSearch } from "@/lib/search";
 import { db } from "@/lib/db";
 import {
   students,
@@ -103,6 +110,79 @@ async function loadMemorizedDates(studentIds: number[], from?: string, to?: stri
     result.set(r.studentId, set);
   }
   return result;
+}
+
+export type DailySummaryRow = {
+  studentId: number;
+  fullName: string;
+  circleName: string;
+  status: DayMemorizationStatus;
+  attendanceStatus: AttendanceStatus | null;
+  sessions: { sessionType: SessionType; summary: string }[];
+};
+
+/** المحصلة اليومية: حالة كل طالب (حافظ/لم يحفظ/مراجعة/لم يسمع) في يوم واحد، بنفس منطق التقارير */
+export async function getDailySummary(date: string, circleId?: number, query?: string): Promise<DailySummaryRow[]> {
+  await requireSession();
+  const ids = await accessibleCircleIds();
+  let circleRows =
+    ids === null
+      ? await db.select().from(circles)
+      : ids.length
+        ? await db.select().from(circles).where(inArray(circles.id, ids))
+        : [];
+  if (circleId) circleRows = circleRows.filter((c) => c.id === circleId);
+  if (!circleRows.length) return [];
+  const circleNames = new Map(circleRows.map((c) => [c.id, c.name]));
+
+  const roster = (await db.select().from(students).where(inArray(students.circleId, [...circleNames.keys()])))
+    .filter((s) => s.joinDate <= date && (!query || matchesSearch(s.fullName, query)))
+    .sort((a, b) => a.fullName.localeCompare(b.fullName, "ar"));
+  if (!roster.length) return [];
+  const studentIds = roster.map((s) => s.id);
+
+  const [attendance, sessions, memorized] = await Promise.all([
+    db
+      .select()
+      .from(attendanceRecords)
+      .where(and(inArray(attendanceRecords.studentId, studentIds), eq(attendanceRecords.date, date))),
+    db
+      .select()
+      .from(memorizationSessions)
+      .where(and(inArray(memorizationSessions.studentId, studentIds), eq(memorizationSessions.date, date))),
+    loadMemorizedDates(studentIds, date, date),
+  ]);
+  const items = sessions.length
+    ? await db
+        .select()
+        .from(memorizationSessionItems)
+        .where(inArray(memorizationSessionItems.sessionId, sessions.map((s) => s.id)))
+    : [];
+  const attendanceByStudent = new Map(attendance.map((a) => [a.studentId, a.status as AttendanceStatus]));
+
+  return roster.flatMap((s) => {
+    const own = sessions.filter((x) => x.studentId === s.id);
+    const status = dayStatus(
+      date,
+      s.joinDate,
+      memorized.get(s.id) ?? new Set<string>(),
+      own.map((x) => x.sessionType as SessionType)
+    );
+    if (!status) return [];
+    return [
+      {
+        studentId: s.id,
+        fullName: s.fullName,
+        circleName: circleNames.get(s.circleId) ?? "",
+        status,
+        attendanceStatus: attendanceByStudent.get(s.id) ?? null,
+        sessions: own.map((x) => ({
+          sessionType: x.sessionType as SessionType,
+          summary: summarizeSessionItems(items.filter((i) => i.sessionId === x.id)),
+        })),
+      },
+    ];
+  });
 }
 
 export async function getStudentReport(studentId: number, from?: string, to?: string, monthly = false) {

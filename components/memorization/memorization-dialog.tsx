@@ -107,11 +107,13 @@ function rowFromRecord(item: SessionItemRecord): ItemRow {
 export function MemorizationDialog({
   students,
   defaultStudentId,
+  defaultDate,
   session,
   trigger,
 }: {
   students: StudentOption[];
   defaultStudentId?: number;
+  defaultDate?: string;
   /** إن مُررت، يعمل الحوار في وضع تعديل جلسة موجودة بدل إنشاء جلسة جديدة */
   session?: EditableSession;
   trigger?: React.ReactNode;
@@ -230,7 +232,7 @@ export function MemorizationDialog({
                 name="date"
                 type="date"
                 required
-                defaultValue={session?.date ?? new Date().toISOString().slice(0, 10)}
+                defaultValue={session?.date ?? defaultDate ?? new Date().toISOString().slice(0, 10)}
               />
             </div>
           </div>

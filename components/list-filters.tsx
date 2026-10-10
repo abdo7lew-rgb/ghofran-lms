@@ -15,20 +15,26 @@ export function ListFilters({
   query,
   circleId,
   placeholder = "ابحث عن طالب بالاسم...",
+  keep,
 }: {
   circles: { id: number; name: string }[];
   query?: string;
   circleId?: string;
   placeholder?: string;
+  /** معاملات أخرى في الرابط تبقى كما هي عند تغيير البحث أو الحلقة (مثل date) */
+  keep?: Record<string, string | undefined>;
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const [text, setText] = React.useState(query ?? "");
   const [pending, startTransition] = React.useTransition();
+  const keepQuery = new URLSearchParams(
+    Object.entries(keep ?? {}).filter((e): e is [string, string] => Boolean(e[1]))
+  ).toString();
 
   const navigate = React.useCallback(
     (next: { q?: string; circle?: string }) => {
-      const sp = new URLSearchParams();
+      const sp = new URLSearchParams(keepQuery);
       const q = next.q ?? text;
       const circle = next.circle ?? circleId;
       if (q.trim()) sp.set("q", q.trim());
@@ -36,7 +42,7 @@ export function ListFilters({
       const qs = sp.toString();
       startTransition(() => router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false }));
     },
-    [text, circleId, pathname, router]
+    [text, circleId, pathname, router, keepQuery]
   );
 
   React.useEffect(() => {

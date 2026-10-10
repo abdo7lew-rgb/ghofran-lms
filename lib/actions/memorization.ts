@@ -41,7 +41,7 @@ async function fetchItemsBySessionIds(sessionIds: number[]): Promise<Map<number,
   return map;
 }
 
-export async function listRecentSessions(circleId?: number, studentQuery?: string) {
+export async function listRecentSessions(circleId?: number, studentQuery?: string, date?: string) {
   await requireSession();
   const ids = await accessibleCircleIds();
 
@@ -67,7 +67,12 @@ export async function listRecentSessions(circleId?: number, studentQuery?: strin
   const sessions = await db
     .select()
     .from(memorizationSessions)
-    .where(inArray(memorizationSessions.studentId, roster.map((s) => s.id)))
+    .where(
+      and(
+        inArray(memorizationSessions.studentId, roster.map((s) => s.id)),
+        date ? eq(memorizationSessions.date, date) : undefined
+      )
+    )
     .orderBy(desc(memorizationSessions.date), desc(memorizationSessions.id))
     .limit(100);
 
