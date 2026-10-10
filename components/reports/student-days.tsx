@@ -5,7 +5,7 @@ import { ATTENDANCE_STATUS_LABELS, DAY_MEMORIZATION_LABELS, SESSION_TYPE_LABELS,
 import type { ReportDay, DayMemorizationStatus } from "@/lib/actions/reports";
 import { cn } from "@/lib/utils";
 
-export const STATUS_STYLES: Record<DayMemorizationStatus, { cell: string; dot: string; chip: string }> = {
+const STATUS_STYLES: Record<DayMemorizationStatus, { cell: string; dot: string; chip: string }> = {
   MEMORIZED: {
     cell: "bg-success/15 border-success/40 text-success hover:bg-success/25",
     dot: "bg-success",
@@ -28,7 +28,7 @@ export const STATUS_STYLES: Record<DayMemorizationStatus, { cell: string; dot: s
   },
 };
 
-export const STATUS_ORDER: DayMemorizationStatus[] = ["MEMORIZED", "NOT_MEMORIZED", "REVIEW", "NOT_RECITED"];
+const STATUS_ORDER: DayMemorizationStatus[] = ["MEMORIZED", "NOT_MEMORIZED", "REVIEW", "NOT_RECITED"];
 
 // أعمدة التقويم من اليمين: السبت ثم الأحد إلى الأربعاء (الخميس والجمعة عطلة)
 const COLUMN_WEEKDAYS = [6, 0, 1, 2, 3];
