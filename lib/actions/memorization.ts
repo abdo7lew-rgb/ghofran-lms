@@ -184,6 +184,7 @@ export async function createMemorizationSessionAction(
   );
 
   revalidatePath("/memorization");
+  revalidatePath("/recite");
   revalidatePath(`/students/${parsed.data.studentId}`);
   revalidatePath("/dashboard");
   return { success: true };
@@ -249,6 +250,7 @@ export async function updateMemorizationSessionAction(
   );
 
   revalidatePath("/memorization");
+  revalidatePath("/recite");
   revalidatePath(`/students/${parsed.data.studentId}`);
   revalidatePath("/dashboard");
   return { success: true };
@@ -259,6 +261,7 @@ export async function deleteMemorizationSessionAction(id: number, studentId: num
   // حذف الجلسة يحذف كل مقاطعها تلقائياً (onDelete cascade)
   await db.delete(memorizationSessions).where(eq(memorizationSessions.id, id));
   revalidatePath("/memorization");
+  revalidatePath("/recite");
   revalidatePath(`/students/${studentId}`);
 }
 

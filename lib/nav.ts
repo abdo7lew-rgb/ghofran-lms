@@ -7,6 +7,7 @@ import {
   CalendarCheck,
   FileText,
   UserCog,
+  ListChecks,
 } from "lucide-react";
 
 export type NavItem = {
@@ -22,6 +23,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/circles", label: "الحلقات", icon: Users, superAdminOnly: true },
   { href: "/students", label: "الطلبة", icon: GraduationCap },
   { href: "/attendance", label: "الحضور والغياب", icon: CalendarCheck },
+  { href: "/recite", label: "شاشة التسميع", icon: ListChecks },
   { href: "/memorization", label: "الحفظ والمراجعة", icon: BookMarked },
   { href: "/reports", label: "التقارير", icon: FileText },
 ];

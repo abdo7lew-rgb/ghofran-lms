@@ -149,12 +149,14 @@ export function MemorizationDialog({
   students,
   defaultStudentId,
   defaultDate,
+  defaultSessionType,
   session,
   trigger,
 }: {
   students: StudentOption[];
   defaultStudentId?: number;
   defaultDate?: string;
+  defaultSessionType?: SessionType;
   /** إن مُررت، يعمل الحوار في وضع تعديل جلسة موجودة بدل إنشاء جلسة جديدة */
   session?: EditableSession;
   trigger?: React.ReactNode;
@@ -167,7 +169,7 @@ export function MemorizationDialog({
   );
 
   const [studentId, setStudentId] = React.useState(defaultStudentId ? String(defaultStudentId) : "");
-  const [sessionType, setSessionType] = React.useState<SessionType>(session?.sessionType ?? "NEW");
+  const [sessionType, setSessionType] = React.useState<SessionType>(session?.sessionType ?? defaultSessionType ?? "NEW");
   const [items, setItems] = React.useState<ItemRow[]>(() =>
     session && session.items.length > 0 ? session.items.map(rowFromRecord) : [newRow()]
   );
@@ -185,7 +187,7 @@ export function MemorizationDialog({
   if (open !== prevOpen) {
     setPrevOpen(open);
     if (open) {
-      setSessionType(session?.sessionType ?? "NEW");
+      setSessionType(session?.sessionType ?? defaultSessionType ?? "NEW");
       setItems(session && session.items.length > 0 ? session.items.map(rowFromRecord) : [newRow()]);
       setSuggestion(null);
     }
