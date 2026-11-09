@@ -1,6 +1,7 @@
 import { listCirclesWithStats, listTeacherOptions } from "@/lib/actions/circles";
 import { CircleDialog } from "@/components/circles/circle-dialog";
 import { CircleRowActions } from "@/components/circles/circle-row-actions";
+import { CircleOrderButtons } from "@/components/circles/circle-order-buttons";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +30,7 @@ export default async function CirclesPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10">الترتيب</TableHead>
                   <TableHead>اسم الحلقة</TableHead>
                   <TableHead>المدرسون المسؤولون</TableHead>
                   <TableHead>عدد الطلبة</TableHead>
@@ -36,8 +38,15 @@ export default async function CirclesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {circles.map((circle) => (
+                {circles.map((circle, index) => (
                   <TableRow key={circle.id}>
+                    <TableCell>
+                      <CircleOrderButtons
+                        id={circle.id}
+                        isFirst={index === 0}
+                        isLast={index === circles.length - 1}
+                      />
+                    </TableCell>
                     <TableCell className="font-medium">
                       <div className="flex flex-col">
                         {circle.name}

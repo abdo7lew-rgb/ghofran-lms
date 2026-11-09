@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 
-const SUPER_ADMIN_ONLY_PREFIXES = ["/teachers", "/circles"];
+// "/recite" تجريبية للشيخ المشرف فقط حالياً
+const SUPER_ADMIN_ONLY_PREFIXES = ["/teachers", "/circles", "/recite"];
 
 export default auth((req) => {
   const { pathname } = req.nextUrl;

@@ -1,7 +1,9 @@
 import Link from "next/link";
-import { listStudents, listCircleOptionsForStudentForm } from "@/lib/actions/students";
+import { listStudents, listCircleOptionsForStudentForm, listRemovedStudents } from "@/lib/actions/students";
+import { requireSession } from "@/lib/auth/guards";
 import { StudentDialog } from "@/components/students/student-dialog";
 import { StudentRowActions } from "@/components/students/student-row-actions";
+import { RestoreStudentDialog } from "@/components/students/restore-student-dialog";
 import { ListFilters } from "@/components/list-filters";
 import { matchesSearch } from "@/lib/search";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,7 +15,16 @@ export default async function StudentsPage({
   searchParams: Promise<{ q?: string; circle?: string }>;
 }) {
   const { q, circle } = await searchParams;
-  const [allStudents, circleOptions] = await Promise.all([listStudents(), listCircleOptionsForStudentForm()]);
+  const session = await requireSession();
+  const isAdmin = session.user.role === "SUPER_ADMIN";
+  const [allStudents, circleOptions, allRemoved] = await Promise.all([
+    listStudents(),
+    listCircleOptionsForStudentForm(),
+    isAdmin ? listRemovedStudents() : Promise.resolve([]),
+  ]);
+  const removedStudents = allRemoved.filter(
+    (s) => !q || matchesSearch(`${s.fullName} ${s.guardianName ?? ""} ${s.guardianPhone ?? ""}`, q)
+  );
   const isFiltered = Boolean(q || circle);
   const students = allStudents.filter(
     (s) =>
@@ -97,6 +108,59 @@ export default async function StudentsPage({
           )}
         </CardContent>
       </Card>
+
+      {removedStudents.length > 0 && !circle && (
+        <Card>
+          <CardHeader>
+            <CardTitle>طلبة بدون حلقة ({removedStudents.length})</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              طلبة أُلغوا من حلقاتهم. بياناتهم وسجلاتهم محفوظة، ولا يدخلون في إحصائيات الحلقات.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>الاسم</TableHead>
+                  <TableHead>آخر حلقة</TableHead>
+                  <TableHead>ولي الأمر</TableHead>
+                  <TableHead>تاريخ الإلغاء</TableHead>
+                  <TableHead />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {removedStudents.map((student) => (
+                  <TableRow key={student.id} className="text-muted-foreground">
+                    <TableCell className="font-medium text-foreground">
+                      <Link href={`/students/${student.id}`} className="hover:underline">
+                        {student.fullName}
+                      </Link>
+                    </TableCell>
+                    <TableCell>{student.lastCircleName || "—"}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col text-sm">
+                        <span>{student.guardianName || "—"}</span>
+                        {student.guardianPhone && <span dir="ltr">{student.guardianPhone}</span>}
+                      </div>
+                    </TableCell>
+                    <TableCell>{student.leftAt}</TableCell>
+                    <TableCell>
+                      <div className="flex justify-end">
+                        <RestoreStudentDialog
+                          studentId={student.id}
+                          studentName={student.fullName}
+                          lastCircleId={student.circleId}
+                          circleOptions={circleOptions}
+                        />
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

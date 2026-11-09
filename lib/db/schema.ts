@@ -14,6 +14,8 @@ export const circles = sqliteTable("circles", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
   description: text("description"),
+  // ترتيب العرض الذي يحدده الشيخ الرئيسي (الأصغر أولاً). يُضاف عبر scripts/apply-circle-sort-order.mjs
+  sortOrder: integer("sort_order").notNull().default(0),
   createdAt: text("created_at").notNull().default(sql`(current_timestamp)`),
 });
 
@@ -43,6 +45,11 @@ export const students = sqliteTable("students", {
     .notNull()
     .references(() => circles.id, { onDelete: "cascade" }),
   joinDate: text("join_date").notNull(),
+  // تاريخ إلغاء الطالب من الحلقة (انقطع عن الحضور). null = طالب نشط.
+  // الطالب الملغى يبقى بكل بياناته وسجلاته، ويبقى circleId على آخر حلقة كان فيها للمرجعية فقط،
+  // لكنه لا يظهر في الحلقة ولا يدخل في الحضور/التسميع/إحصائيات الحلقة والمدرس.
+  // يُضاف عبر scripts/apply-student-left-at.mjs
+  leftAt: text("left_at"),
   notes: text("notes"),
   createdAt: text("created_at").notNull().default(sql`(current_timestamp)`),
 });

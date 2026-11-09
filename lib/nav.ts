@@ -23,7 +23,9 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/circles", label: "الحلقات", icon: Users, superAdminOnly: true },
   { href: "/students", label: "الطلبة", icon: GraduationCap },
   { href: "/attendance", label: "الحضور والغياب", icon: CalendarCheck },
-  { href: "/recite", label: "شاشة التسميع", icon: ListChecks },
+  // تجريبية: للشيخ المشرف فقط حالياً. لفتحها للمدرسين: احذف superAdminOnly هنا،
+  // و"/recite" من SUPER_ADMIN_ONLY_PREFIXES في proxy.ts، و requireSuperAdmin من lib/actions/recite.ts
+  { href: "/recite", label: "شاشة التسميع (تجريبية)", icon: ListChecks, superAdminOnly: true },
   { href: "/memorization", label: "الحفظ والمراجعة", icon: BookMarked },
   { href: "/reports", label: "التقارير", icon: FileText },
 ];

@@ -6,6 +6,7 @@ import { assertCircleAccess, assertStudentAccess } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
 import { students, attendanceRecords, circles } from "@/lib/db/schema";
 import { isHoliday } from "@/lib/holidays";
+import { isActiveStudent } from "@/lib/db/filters";
 
 export type AttendanceStatus = "PRESENT" | "ABSENT" | "LATE" | "EXCUSED";
 
@@ -13,7 +14,7 @@ export async function getAttendanceSheet(circleId: number, date: string) {
   await assertCircleAccess(circleId);
 
   const [circle] = await db.select().from(circles).where(eq(circles.id, circleId)).limit(1);
-  const roster = await db.select().from(students).where(eq(students.circleId, circleId));
+  const roster = await db.select().from(students).where(and(eq(students.circleId, circleId), isActiveStudent));
   const existing = roster.length
     ? await db
         .select()
@@ -53,7 +54,10 @@ export async function saveAttendanceAction(
 
   const session = await assertCircleAccess(circleId);
 
-  const roster = await db.select({ id: students.id }).from(students).where(eq(students.circleId, circleId));
+  const roster = await db
+    .select({ id: students.id })
+    .from(students)
+    .where(and(eq(students.circleId, circleId), isActiveStudent));
   const rosterIds = new Set(roster.map((s) => s.id));
 
   const entries: { studentId: number; status: AttendanceStatus }[] = [];

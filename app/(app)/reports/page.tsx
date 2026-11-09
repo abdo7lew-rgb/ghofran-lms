@@ -127,6 +127,8 @@ async function StudentReportView({ studentId, period }: { studentId: number; per
 
   const presentDays = report.attendance.filter((a) => a.status === "PRESENT" || a.status === "LATE").length;
   const grade = report.memorizationGrade;
+  // آخر جلسة حفظ جديد في الفترة (الجلسات مرتبة تصاعدياً بالتاريخ)
+  const lastNew = report.memorization.filter((m) => m.sessionType === "NEW" && m.positionText).at(-1);
 
   return (
     <>
@@ -136,9 +138,8 @@ async function StudentReportView({ studentId, period }: { studentId: number; per
         teacherNames={report.teacherNames}
         periodLabel={period.label}
         grade={grade}
-        attendanceRate={report.attendanceRate}
         attendance={report.attendance}
-        days={report.days}
+        lastPosition={lastNew?.positionText ?? null}
       />
       <div className="print:hidden">
         <PrintableReport

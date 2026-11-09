@@ -1,10 +1,11 @@
 "use server";
 
-import { and, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, sql } from "drizzle-orm";
 import { requireSession, accessibleCircleIds } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
 import { circles, students, attendanceRecords, memorizationSessions, users } from "@/lib/db/schema";
 import { excludeHolidayRecords } from "@/lib/holidays";
+import { isActiveStudent } from "@/lib/db/filters";
 
 function daysAgo(days: number) {
   const d = new Date();
@@ -17,12 +18,16 @@ export async function getDashboardStats() {
   const ids = await accessibleCircleIds();
   const cutoff = daysAgo(30);
 
-  const circleRows = ids === null ? await db.select().from(circles) : await db.select().from(circles).where(inArray(circles.id, ids.length ? ids : [-1]));
+  const circleRows = await db
+    .select()
+    .from(circles)
+    .where(ids === null ? undefined : inArray(circles.id, ids.length ? ids : [-1]))
+    .orderBy(asc(circles.sortOrder), asc(circles.id));
 
   const circleIds = circleRows.map((c) => c.id);
 
   const studentRows = circleIds.length
-    ? await db.select().from(students).where(inArray(students.circleId, circleIds))
+    ? await db.select().from(students).where(and(inArray(students.circleId, circleIds), isActiveStudent))
     : [];
 
   const teacherCount =

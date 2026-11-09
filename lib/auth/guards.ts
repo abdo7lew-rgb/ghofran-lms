@@ -43,7 +43,8 @@ export async function assertStudentAccess(studentId: number) {
   if (session.user.role === "SUPER_ADMIN") return session;
 
   const [student] = await db.select().from(students).where(eq(students.id, studentId)).limit(1);
-  if (!student) {
+  // الطالب الملغى من الحلقة (بدون حلقة) يديره الشيخ الرئيسي فقط
+  if (!student || student.leftAt) {
     throw new AuthError("لا تملك صلاحية الوصول لهذا الطالب");
   }
 

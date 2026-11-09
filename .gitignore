@@ -38,6 +38,9 @@ yarn-error.log*
 *.db
 *.db-journal
 
+# database backups (contain personal data — never commit)
+/backups/
+
 # vercel
 .vercel
 

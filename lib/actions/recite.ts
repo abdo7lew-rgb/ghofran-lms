@@ -2,10 +2,11 @@
 
 import { and, asc, eq, inArray, lt } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { assertCircleAccess, assertStudentAccess } from "@/lib/auth/guards";
+import { assertCircleAccess, assertStudentAccess, requireSuperAdmin } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
 import { attendanceRecords, memorizationSessionItems, memorizationSessions, students } from "@/lib/db/schema";
 import { isHoliday } from "@/lib/holidays";
+import { isActiveStudent } from "@/lib/db/filters";
 import { isValidAyahNumber, summarizeSessionItems } from "@/lib/quran/surahs";
 import { suggestNextPortion, type NextSuggestion, type PastPortion } from "@/lib/quran/next-session";
 import type { AttendanceStatus } from "@/lib/actions/attendance";
@@ -28,8 +29,9 @@ export type ReciteRow = {
 
 /** بيانات شاشة التسميع لحلقة في يوم: حالة كل طالب واقتراح مقطعه القادم (من الجلسات السابقة لذلك اليوم فقط) */
 export async function getReciteBoard(circleId: number, date: string): Promise<ReciteRow[]> {
+  await requireSuperAdmin(); // شاشة التسميع تجريبية للشيخ المشرف فقط
   await assertCircleAccess(circleId);
-  const roster = (await db.select().from(students).where(eq(students.circleId, circleId)))
+  const roster = (await db.select().from(students).where(and(eq(students.circleId, circleId), isActiveStudent)))
     .filter((s) => s.joinDate <= date)
     .sort((a, b) => a.fullName.localeCompare(b.fullName, "ar"));
   if (!roster.length) return [];
@@ -158,6 +160,7 @@ export async function quickRecordAction(input: {
   if (!isValidAyahNumber(surahNumber, fromAyah) || !isValidAyahNumber(surahNumber, toAyah) || fromAyah > toAyah) {
     return { ok: false, error: "رقم الآية غير صحيح لهذه السورة" };
   }
+  await requireSuperAdmin(); // تجريبية للشيخ المشرف فقط
   const session = await assertStudentAccess(studentId);
   const recordedBy = Number(session.user.id);
 
@@ -194,6 +197,7 @@ export async function markAbsentAction(input: {
   status: "ABSENT" | "EXCUSED";
 }): Promise<ActionResult> {
   if (isHoliday(input.date)) return { ok: false, error: "لا يُسجَّل حضور في يوم عطلة" };
+  await requireSuperAdmin(); // تجريبية للشيخ المشرف فقط
   const session = await assertStudentAccess(input.studentId);
   const att = await setAttendance(input.studentId, input.date, input.status, Number(session.user.id));
   revalidatePath("/recite");
@@ -212,6 +216,7 @@ export async function markAbsentAction(input: {
 
 /** يتراجع عن آخر ضغطة: يحذف الجلسة التي أنشأتها ويعيد الحضور كما كان */
 export async function undoQuickAction(token: UndoToken): Promise<{ ok: boolean }> {
+  await requireSuperAdmin(); // تجريبية للشيخ المشرف فقط
   const session = await assertStudentAccess(token.studentId);
   if (token.sessionId != null) {
     const [own] = await db

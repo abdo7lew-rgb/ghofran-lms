@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, gte, inArray, lte, notExists, type AnyColumn } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lte, notExists, type AnyColumn } from "drizzle-orm";
 import { requireSession, requireSuperAdmin, assertStudentAccess, assertCircleAccess } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
 import {
@@ -13,6 +13,7 @@ import {
   memorizationSessionItems,
 } from "@/lib/db/schema";
 import { summarizeSessionItems } from "@/lib/quran/surahs";
+import { isActiveStudent } from "@/lib/db/filters";
 import { isHoliday, listDatesInRange, excludeHolidayRecords } from "@/lib/holidays";
 import type { AttendanceStatus } from "@/lib/actions/attendance";
 import type { SessionType } from "@/lib/actions/memorization";
@@ -191,7 +192,7 @@ export async function getStudentReport(studentId: number, from?: string, to?: st
 
   return {
     student,
-    circleName: circle?.name ?? "",
+    circleName: student.leftAt ? `${circle?.name ?? ""} (ملغى من الحلقة)` : (circle?.name ?? ""),
     teacherNames: teacherRows.map((t) => t.name),
     from: effectiveFrom,
     to: effectiveTo,
@@ -214,7 +215,7 @@ export async function getCircleReport(circleId: number, from?: string, to?: stri
     .innerJoin(users, eq(circleTeachers.teacherId, users.id))
     .where(eq(circleTeachers.circleId, circleId));
 
-  const roster = await db.select().from(students).where(eq(students.circleId, circleId));
+  const roster = await db.select().from(students).where(and(eq(students.circleId, circleId), isActiveStudent));
   const studentIds = roster.map((s) => s.id);
 
   const attendanceRaw = studentIds.length
@@ -265,10 +266,11 @@ export async function getTeacherReport(teacherId: number, from?: string, to?: st
     .select({ id: circles.id, name: circles.name })
     .from(circleTeachers)
     .innerJoin(circles, eq(circleTeachers.circleId, circles.id))
-    .where(eq(circleTeachers.teacherId, teacherId));
+    .where(eq(circleTeachers.teacherId, teacherId))
+    .orderBy(asc(circles.sortOrder), asc(circles.id));
   const circleIds = circleRows.map((c) => c.id);
   const roster = circleIds.length
-    ? await db.select().from(students).where(inArray(students.circleId, circleIds))
+    ? await db.select().from(students).where(and(inArray(students.circleId, circleIds), isActiveStudent))
     : [];
   const studentIds = roster.map((s) => s.id);
 
@@ -297,12 +299,20 @@ export async function getTeacherReport(teacherId: number, from?: string, to?: st
 
 export async function listReportTargets() {
   const session = await requireSession();
-  const [studentsList, circlesList, teachersList] = await Promise.all([
-    (await import("@/lib/actions/students")).listStudents(),
+  const isAdmin = session.user.role === "SUPER_ADMIN";
+  const { listStudents, listRemovedStudents } = await import("@/lib/actions/students");
+  const [studentsList, removedList, circlesList, teachersList] = await Promise.all([
+    listStudents(),
+    isAdmin ? listRemovedStudents() : Promise.resolve([]),
     (await import("@/lib/actions/circles")).listMyCircles(),
-    session.user.role === "SUPER_ADMIN"
+    isAdmin
       ? db.select({ id: users.id, name: users.name }).from(users).where(eq(users.role, "TEACHER"))
       : Promise.resolve([]),
   ]);
-  return { students: studentsList, circles: circlesList, teachers: teachersList };
+  // الشيخ يقدر يطبع تقرير طالب ملغى (تظهر سجلاته القديمة كاملة)
+  const allStudents = [
+    ...studentsList,
+    ...removedList.map((s) => ({ ...s, circleName: "بدون حلقة" })),
+  ];
+  return { students: allStudents, circles: circlesList, teachers: teachersList };
 }

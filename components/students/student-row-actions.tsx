@@ -2,6 +2,7 @@
 
 import { StudentDialog } from "@/components/students/student-dialog";
 import { TransferStudentDialog } from "@/components/students/transfer-student-dialog";
+import { RemoveFromCircleButton } from "@/components/students/remove-from-circle-button";
 import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
 import { deleteStudentAction } from "@/lib/actions/students";
 
@@ -31,6 +32,7 @@ export function StudentRowActions({ student, circleOptions }: { student: Student
         circleOptions={circleOptions}
       />
       <StudentDialog student={student} circleOptions={circleOptions} />
+      <RemoveFromCircleButton studentId={student.id} studentName={student.fullName} />
       <ConfirmDeleteButton
         title={`حذف الطالب ${student.fullName}`}
         description="سيتم حذف بيانات الطالب وكل سجلات حضوره وحفظه نهائياً. هذا الإجراء لا يمكن التراجع عنه."

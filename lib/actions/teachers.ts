@@ -1,23 +1,25 @@
 "use server";
 
 import { z } from "zod";
-import { eq, count } from "drizzle-orm";
+import { asc, eq, count } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { requireSuperAdmin } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
 import { users, circles, circleTeachers, students } from "@/lib/db/schema";
+import { isActiveStudent } from "@/lib/db/filters";
 
 export async function listTeachersWithStats() {
   await requireSuperAdmin();
 
   const teachers = await db.select().from(users).where(eq(users.role, "TEACHER"));
 
-  const circleRows = await db.select().from(circles);
+  const circleRows = await db.select().from(circles).orderBy(asc(circles.sortOrder), asc(circles.id));
   const membershipRows = await db.select().from(circleTeachers);
   const studentCounts = await db
     .select({ circleId: students.circleId, total: count() })
     .from(students)
+    .where(isActiveStudent)
     .groupBy(students.circleId);
 
   return teachers.map((teacher) => {

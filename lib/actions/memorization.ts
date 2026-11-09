@@ -8,6 +8,7 @@ import { db } from "@/lib/db";
 import { students, circles, memorizationSessions, memorizationSessionItems } from "@/lib/db/schema";
 import { isValidAyahNumber, getSurah } from "@/lib/quran/surahs";
 import { matchesSearch } from "@/lib/search";
+import { isActiveStudent } from "@/lib/db/filters";
 import { suggestNextPortion, type NextSuggestion, type PastPortion } from "@/lib/quran/next-session";
 
 export type SessionType = "NEW" | "REVIEW";
@@ -59,7 +60,9 @@ export async function listRecentSessions(circleId?: number, studentQuery?: strin
   }
   if (circleIds.length === 0) return [];
 
-  const roster = (await db.select().from(students).where(inArray(students.circleId, circleIds))).filter(
+  const roster = (
+    await db.select().from(students).where(and(inArray(students.circleId, circleIds), isActiveStudent))
+  ).filter(
     (s) => !studentQuery || matchesSearch(s.fullName, studentQuery)
   );
   if (roster.length === 0) return [];

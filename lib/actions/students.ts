@@ -1,12 +1,14 @@
 "use server";
 
 import { z } from "zod";
-import { eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { requireSession, accessibleCircleIds, assertStudentAccess } from "@/lib/auth/guards";
+import { requireSession, requireSuperAdmin, accessibleCircleIds, assertStudentAccess } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
 import { students, circles } from "@/lib/db/schema";
+import { isActiveStudent } from "@/lib/db/filters";
 
+/** الطلبة النشطون (داخل حلقاتهم) المتاحون للمستخدم الحالي. */
 export async function listStudents() {
   await requireSession();
   const ids = await accessibleCircleIds();
@@ -16,9 +18,9 @@ export async function listStudents() {
 
   const rows =
     ids === null
-      ? await db.select().from(students)
+      ? await db.select().from(students).where(isActiveStudent)
       : ids.length
-        ? await db.select().from(students).where(inArray(students.circleId, ids))
+        ? await db.select().from(students).where(and(inArray(students.circleId, ids), isActiveStudent))
         : [];
 
   return rows
@@ -26,15 +28,29 @@ export async function listStudents() {
     .sort((a, b) => a.fullName.localeCompare(b.fullName, "ar"));
 }
 
+/** الطلبة الملغون من حلقاتهم (بدون حلقة) — للشيخ الرئيسي فقط. lastCircleName = آخر حلقة كانوا فيها. */
+export async function listRemovedStudents() {
+  await requireSuperAdmin();
+  const circleRows = await db.select({ id: circles.id, name: circles.name }).from(circles);
+  const circleMap = new Map(circleRows.map((c) => [c.id, c.name]));
+  const rows = await db
+    .select()
+    .from(students)
+    .where(isNotNull(students.leftAt))
+    .orderBy(desc(students.leftAt));
+  return rows.map((s) => ({ ...s, lastCircleName: circleMap.get(s.circleId) ?? "" }));
+}
+
 /** الحلقات المتاحة للاختيار عند إضافة/تعديل طالب حسب دور المستخدم الحالي. */
 export async function listCircleOptionsForStudentForm() {
   await requireSession();
   const ids = await accessibleCircleIds();
-  return ids === null
-    ? db.select({ id: circles.id, name: circles.name }).from(circles)
-    : ids.length
-      ? db.select({ id: circles.id, name: circles.name }).from(circles).where(inArray(circles.id, ids))
-      : [];
+  if (ids !== null && ids.length === 0) return [];
+  return db
+    .select({ id: circles.id, name: circles.name })
+    .from(circles)
+    .where(ids === null ? undefined : inArray(circles.id, ids))
+    .orderBy(asc(circles.sortOrder), asc(circles.id));
 }
 
 async function assertCanUseCircle(circleId: number) {
@@ -152,6 +168,32 @@ export async function transferStudentAction(studentId: number, newCircleId: numb
   revalidatePath(`/students/${studentId}`);
   revalidatePath("/circles");
   revalidatePath("/dashboard");
+}
+
+function todayISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * يلغي الطالب من حلقته دون حذفه: يبقى بكل بياناته وسجلات حضوره وحفظه، لكنه يخرج من قوائم الحلقة
+ * والحضور والتسميع ولا يدخل في إحصائيات الحلقة والمدرس. يمكن للشيخ الرئيسي إرجاعه لاحقاً.
+ */
+export async function removeStudentFromCircleAction(studentId: number) {
+  await assertStudentAccess(studentId);
+  await db.update(students).set({ leftAt: todayISO() }).where(eq(students.id, studentId));
+
+  revalidatePath("/", "layout");
+}
+
+/** يرجع طالباً ملغى إلى حلقة (نفس حلقته السابقة أو غيرها) — للشيخ الرئيسي فقط. */
+export async function restoreStudentAction(studentId: number, circleId: number) {
+  await requireSuperAdmin();
+  const [circle] = await db.select({ id: circles.id }).from(circles).where(eq(circles.id, circleId)).limit(1);
+  if (!circle) throw new Error("الحلقة غير موجودة");
+
+  await db.update(students).set({ circleId, leftAt: null }).where(eq(students.id, studentId));
+
+  revalidatePath("/", "layout");
 }
 
 export async function deleteStudentAction(id: number) {

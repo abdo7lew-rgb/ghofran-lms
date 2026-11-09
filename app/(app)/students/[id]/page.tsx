@@ -7,6 +7,8 @@ import { getSurahName, formatItemRangeCompact } from "@/lib/quran/surahs";
 import { SESSION_TYPE_LABELS, RATING_LABELS, ATTENDANCE_STATUS_LABELS } from "@/lib/labels";
 import { StudentDialog } from "@/components/students/student-dialog";
 import { TransferStudentDialog } from "@/components/students/transfer-student-dialog";
+import { RemoveFromCircleButton } from "@/components/students/remove-from-circle-button";
+import { RestoreStudentDialog } from "@/components/students/restore-student-dialog";
 import { MemorizationDialog } from "@/components/memorization/memorization-dialog";
 import { MemorizationRowActions } from "@/components/memorization/memorization-row-actions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,24 +33,43 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
   ]);
 
   const { student, circleName } = profile;
+  const isRemoved = Boolean(student.leftAt);
 
   return (
     <div className="flex flex-col gap-6">
+      {isRemoved && (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+          هذا الطالب ملغى من الحلقة منذ {student.leftAt} (آخر حلقة: {circleName || "—"}). بياناته وسجلاته محفوظة
+          ولا يدخل في إحصائيات الحلقات.
+        </div>
+      )}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold">{student.fullName}</h1>
           <p className="text-sm text-muted-foreground">
-            الحلقة: {circleName} — الانضمام: {student.joinDate}
+            الحلقة: {isRemoved ? "بدون حلقة" : circleName} — الانضمام: {student.joinDate}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <TransferStudentDialog
-            studentId={student.id}
-            studentName={student.fullName}
-            currentCircleId={student.circleId}
-            currentCircleName={circleName}
-            circleOptions={circleOptions}
-          />
+          {isRemoved ? (
+            <RestoreStudentDialog
+              studentId={student.id}
+              studentName={student.fullName}
+              lastCircleId={student.circleId}
+              circleOptions={circleOptions}
+            />
+          ) : (
+            <>
+              <TransferStudentDialog
+                studentId={student.id}
+                studentName={student.fullName}
+                currentCircleId={student.circleId}
+                currentCircleName={circleName}
+                circleOptions={circleOptions}
+              />
+              <RemoveFromCircleButton studentId={student.id} studentName={student.fullName} />
+            </>
+          )}
           <StudentDialog
             student={student}
             circleOptions={circleOptions}
@@ -124,7 +145,12 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
             <TabsTrigger value="memorization">سجل الحفظ والمراجعة</TabsTrigger>
             <TabsTrigger value="attendance">سجل الحضور</TabsTrigger>
           </TabsList>
-          <MemorizationDialog students={[{ id: student.id, fullName: student.fullName, circleName }]} defaultStudentId={student.id} />
+          {!isRemoved && (
+            <MemorizationDialog
+              students={[{ id: student.id, fullName: student.fullName, circleName }]}
+              defaultStudentId={student.id}
+            />
+          )}
         </div>
 
         <TabsContent value="memorization">
