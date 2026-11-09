@@ -14,7 +14,10 @@ export function CircleRowActions({ circle, teacherOptions }: { circle: Circle; t
       <ConfirmDeleteButton
         title={`حذف حلقة ${circle.name}`}
         description="سيتم حذف الحلقة وجميع بيانات طلبتها وسجلات حضورهم وحفظهم نهائياً. هذا الإجراء لا يمكن التراجع عنه."
-        onConfirm={() => deleteCircleAction(circle.id)}
+        onConfirm={async () => {
+          const result = await deleteCircleAction(circle.id);
+          if (result.error) window.alert(result.error);
+        }}
       />
     </div>
   );

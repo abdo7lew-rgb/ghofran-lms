@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { eq, count, inArray, asc, max } from "drizzle-orm";
+import { and, eq, count, inArray, isNotNull, asc, max } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireSuperAdmin, requireSession, accessibleCircleIds } from "@/lib/auth/guards";
 import { db } from "@/lib/db";
@@ -155,9 +155,23 @@ export async function updateCircleAction(
   return { success: true };
 }
 
-export async function deleteCircleAction(id: number) {
+export async function deleteCircleAction(id: number): Promise<{ error?: string }> {
   await requireSuperAdmin();
+
+  // حماية: حذف الحلقة يحذف كل طلبتها (cascade). الطالب الملغى من الحلقة ما زال مرتبطاً بآخر حلقة كان فيها
+  // ولا يظهر في عدد طلبتها، فنمنع الحذف حتى لا تُحذف بياناته دون قصد.
+  const [{ removed }] = await db
+    .select({ removed: count() })
+    .from(students)
+    .where(and(eq(students.circleId, id), isNotNull(students.leftAt)));
+  if (removed > 0) {
+    return {
+      error: `لا يمكن حذف هذه الحلقة: مرتبط بها ${removed} من الطلبة الملغين (بدون حلقة) وسيُحذفون معها. أرجعهم إلى حلقة أخرى أولاً من صفحة الطلبة.`,
+    };
+  }
+
   await db.delete(circles).where(eq(circles.id, id));
   revalidatePath("/circles");
   revalidatePath("/teachers");
+  return {};
 }
